@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
 import Header from "@/components/Header";
+import AdminNav from "@/components/AdminNav";
 import NuevoLoteForm from "./nuevo-lote-form";
 import { toggleLoteActivoAction } from "./actions";
 
@@ -29,12 +30,13 @@ export default async function AdminLotesPage() {
        FROM lotes l JOIN sucursales s ON s.id = l.sucursal_id
        ORDER BY s.nombre, l.precio_mxn`
     ),
-    query<SucursalRow>("SELECT id, nombre FROM sucursales ORDER BY nombre"),
+    query<SucursalRow>("SELECT id, nombre FROM sucursales WHERE activa = true ORDER BY nombre"),
   ]);
 
   return (
     <div className="flex min-h-screen flex-col">
       <Header titulo="Lotes y precios" subtitulo="Administración" />
+      <AdminNav />
       <main className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
         <NuevoLoteForm sucursales={sucursales} />
 

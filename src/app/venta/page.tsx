@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
 import Header from "@/components/Header";
@@ -20,25 +21,7 @@ export default async function VentaPage() {
   const user = session!.user;
 
   if (user.rol === "admin") {
-    return (
-      <div className="flex min-h-screen flex-col">
-        <Header titulo={`Hola, ${user.name}`} subtitulo="Todas las sucursales" />
-        <main className="flex flex-1 flex-col items-center justify-center gap-4 p-6">
-          <Link
-            href="/admin/lotes"
-            className="rounded-full bg-brand-gold px-6 py-3 font-semibold text-brand-black"
-          >
-            Administrar lotes
-          </Link>
-          <Link
-            href="/admin/inventario"
-            className="rounded-full border border-white/10 px-6 py-3 text-brand-cream"
-          >
-            Ver inventario consolidado
-          </Link>
-        </main>
-      </div>
-    );
+    redirect("/admin/dashboard");
   }
 
   const { rows: sucursalRows } = await query<SucursalRow>(
