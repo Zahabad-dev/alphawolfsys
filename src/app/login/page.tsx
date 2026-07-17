@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useActionState } from "react";
 import { loginAction } from "@/app/actions";
 
@@ -7,7 +8,15 @@ export default function LoginPage() {
   const [error, formAction, pending] = useActionState(loginAction, undefined);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-brand-black px-6">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-brand-black px-6">
+      <Image
+        src="/brand/wolf-logo.png"
+        alt="Wolf Daniel's"
+        width={80}
+        height={80}
+        className="h-20 w-auto object-contain"
+        priority
+      />
       <h1 className="text-center text-2xl text-brand-gold">Wolf Daniels</h1>
 
       <form

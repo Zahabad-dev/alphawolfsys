@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { logoutAction } from "@/app/actions";
 
 export default function Header({
@@ -9,9 +10,18 @@ export default function Header({
 }) {
   return (
     <header className="flex items-center justify-between border-b border-white/10 bg-brand-gray2 px-4 py-3">
-      <div>
-        <p className="text-lg font-semibold text-brand-gold">{titulo}</p>
-        {subtitulo && <p className="text-sm text-brand-cream/70">{subtitulo}</p>}
+      <div className="flex items-center gap-3">
+        <Image
+          src="/brand/wolf-logo.png"
+          alt="Wolf Daniel's"
+          width={36}
+          height={36}
+          className="h-9 w-auto object-contain"
+        />
+        <div>
+          <p className="text-lg font-semibold text-brand-gold">{titulo}</p>
+          {subtitulo && <p className="text-sm text-brand-cream/70">{subtitulo}</p>}
+        </div>
       </div>
       <form action={logoutAction}>
         <button
