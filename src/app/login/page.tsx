@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useActionState } from "react";
 import { loginAction } from "@/app/actions";
+import PasswordInput from "@/components/PasswordInput";
 
 export default function LoginPage() {
   const [error, formAction, pending] = useActionState(loginAction, undefined);
@@ -40,13 +41,7 @@ export default function LoginPage() {
 
         <label className="flex flex-col gap-1 text-sm text-brand-cream/80">
           Contraseña
-          <input
-            name="password"
-            type="password"
-            required
-            autoComplete="current-password"
-            className="rounded-lg border border-white/10 bg-brand-black px-3 py-2 text-brand-cream outline-none focus:border-brand-gold"
-          />
+          <PasswordInput name="password" required autoComplete="current-password" />
         </label>
 
         {error && <p className="text-sm text-brand-red">{error}</p>}
