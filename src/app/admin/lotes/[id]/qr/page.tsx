@@ -43,8 +43,8 @@ export default async function LoteQrPage({
 
   const baseUrl = await getBaseUrl();
   const scanUrl = `${baseUrl}/scan/${lote.qr_token}`;
-  const qrBuffer = await generarQrConLogo(scanUrl, size);
-  const qrDataUrl = `data:image/png;base64,${qrBuffer.toString("base64")}`;
+  const qr = await generarQrConLogo(scanUrl, size);
+  const qrDataUrl = `data:image/png;base64,${qr.buffer.toString("base64")}`;
 
   return (
     <div className="flex min-h-screen flex-col items-center gap-6 bg-white p-8 text-black print:p-0">
@@ -78,7 +78,13 @@ export default async function LoteQrPage({
         <p className="text-lg font-semibold">{lote.sucursal_nombre}</p>
         <p className="text-2xl font-bold">{lote.nombre}</p>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={qrDataUrl} alt={`QR ${lote.nombre}`} width={size} height={size} style={{ width: size, height: size }} />
+        <img
+          src={qrDataUrl}
+          alt={`QR ${lote.nombre}`}
+          width={qr.size}
+          height={qr.size}
+          style={{ width: qr.size, height: qr.size }}
+        />
         <p className="text-3xl font-bold">${Number(lote.precio_mxn).toFixed(2)} MXN</p>
       </div>
       <PrintButton />
