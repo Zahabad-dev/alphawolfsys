@@ -129,6 +129,17 @@ export async function actualizarPrecioAction(
     return { error: "El precio debe ser mayor a 0." };
   }
 
+  const { rows: movRows } = await query<{ total: string }>(
+    "SELECT COUNT(*) AS total FROM movimientos_inventario WHERE lote_id = $1",
+    [id]
+  );
+  if (Number(movRows[0]?.total ?? 0) > 0) {
+    return {
+      error:
+        "Este precio ya tiene ventas/movimientos y probablemente su QR ya está impreso — editarlo cambiaría lo que ese QR muestra. Desactívalo y crea uno nuevo en su lugar.",
+    };
+  }
+
   await query("UPDATE lotes SET precio_mxn = $1, nombre = $2 WHERE id = $3", [
     precioNum,
     etiquetaDe(precioNum),

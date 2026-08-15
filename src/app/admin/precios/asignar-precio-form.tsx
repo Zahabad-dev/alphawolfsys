@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
 import { asignarPrecioAction } from "./actions";
 
 export default function AsignarPrecioForm({
@@ -11,9 +11,15 @@ export default function AsignarPrecioForm({
   sucursales: { id: number; nombre: string }[];
 }) {
   const [state, formAction, pending] = useActionState(asignarPrecioAction, undefined);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    if (state?.success) formRef.current?.reset();
+  }, [state]);
 
   return (
     <form
+      ref={formRef}
       action={formAction}
       className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-brand-gray2 p-4 sm:flex-row sm:items-end"
     >
