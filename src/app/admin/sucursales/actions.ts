@@ -130,12 +130,16 @@ export async function eliminarSucursalAction(
     return { error: "Contraseña incorrecta." };
   }
 
-  const { rows: sucursalRows } = await query<{ nombre: string }>(
-    "SELECT nombre FROM sucursales WHERE id = $1",
+  const { rows: sucursalRows } = await query<{ nombre: string; tipo: string }>(
+    "SELECT nombre, tipo FROM sucursales WHERE id = $1",
     [id]
   );
   const sucursal = sucursalRows[0];
   if (!sucursal) return { error: "Sucursal no encontrada." };
+
+  if (sucursal.tipo === "almacen") {
+    return { error: "El Almacén Central no se puede eliminar." };
+  }
 
   if (typeof nombreConfirmacion !== "string" || nombreConfirmacion !== sucursal.nombre) {
     return { error: `Escribe exactamente "${sucursal.nombre}" para confirmar.` };

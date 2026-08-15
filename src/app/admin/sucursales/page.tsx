@@ -75,14 +75,16 @@ export default async function AdminSucursalesPage() {
                     {s.activa ? "Desactivar" : "Activar"}
                   </button>
                 </form>
-                <EliminarSucursalForm
-                  id={s.id}
-                  nombre={s.nombre}
-                  vendedores={vendedoresPorSucursal.get(s.id) ?? []}
-                  otrasSucursales={sucursales
-                    .filter((otra) => otra.id !== s.id && otra.tipo === "sucursal")
-                    .map((otra) => ({ id: otra.id, nombre: otra.nombre }))}
-                />
+                {s.tipo !== "almacen" && (
+                  <EliminarSucursalForm
+                    id={s.id}
+                    nombre={s.nombre}
+                    vendedores={vendedoresPorSucursal.get(s.id) ?? []}
+                    otrasSucursales={sucursales
+                      .filter((otra) => otra.id !== s.id && otra.tipo === "sucursal")
+                      .map((otra) => ({ id: otra.id, nombre: otra.nombre }))}
+                  />
+                )}
               </div>
             </div>
           </div>
