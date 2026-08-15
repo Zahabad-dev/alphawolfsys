@@ -161,6 +161,10 @@ export async function eliminarSucursalAction(
 
   try {
     await withTransaction(async (client) => {
+      // Borrar movimientos primero: liberan la referencia de usuario_id antes de
+      // tocar a los vendedores (si no, "eliminar cuentas" siempre chocaba con su propio historial).
+      await client.query("DELETE FROM movimientos_inventario WHERE sucursal_id = $1", [id]);
+
       if (vendedoresRows.length > 0) {
         if (accionVendedores === "reasignar") {
           await client.query("UPDATE usuarios SET sucursal_id = $1 WHERE sucursal_id = $2", [
@@ -171,7 +175,7 @@ export async function eliminarSucursalAction(
           await client.query("DELETE FROM usuarios WHERE sucursal_id = $1", [id]);
         }
       }
-      await client.query("DELETE FROM movimientos_inventario WHERE sucursal_id = $1", [id]);
+
       await client.query("DELETE FROM lotes WHERE sucursal_id = $1", [id]);
       await client.query("DELETE FROM sucursales WHERE id = $1", [id]);
     });
