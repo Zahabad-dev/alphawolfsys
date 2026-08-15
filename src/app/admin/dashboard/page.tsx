@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { query } from "@/lib/db";
 import Header from "@/components/Header";
 import AdminNav from "@/components/AdminNav";
-import { UMBRAL_STOCK_BAJO } from "@/lib/constants";
+import NotificacionesToggle from "./notificaciones-toggle";
 
 interface ResumenRow {
   piezas_hoy: number;
@@ -84,10 +84,10 @@ export default async function AdminDashboardPage() {
       query<StockBajoRow>(
         `SELECT sa.lote_id, sa.nombre, sa.stock, s.nombre AS sucursal_nombre
          FROM stock_actual sa
+         JOIN lotes l ON l.id = sa.lote_id
          JOIN sucursales s ON s.id = sa.sucursal_id
-         WHERE sa.stock <= $1
-         ORDER BY sa.stock ASC`,
-        [UMBRAL_STOCK_BAJO]
+         WHERE sa.stock <= l.umbral_stock
+         ORDER BY sa.stock ASC`
       ),
     ]);
 
@@ -100,6 +100,8 @@ export default async function AdminDashboardPage() {
       <Header titulo="Dashboard" subtitulo="Todas las sucursales" />
       <AdminNav />
       <main className="flex flex-1 flex-col gap-8 p-4 sm:p-6">
+        <NotificacionesToggle />
+
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <StatCard titulo="Hoy" piezas={resumen.piezas_hoy} total={resumen.total_hoy} />
           <StatCard titulo="Esta semana" piezas={resumen.piezas_semana} total={resumen.total_semana} />
@@ -120,7 +122,7 @@ export default async function AdminDashboardPage() {
         {stockBajo.length > 0 && (
           <section className="rounded-2xl border border-brand-red/40 bg-brand-red/10 p-4">
             <p className="mb-2 font-semibold text-brand-red">
-              ⚠ {stockBajo.length} lote{stockBajo.length > 1 ? "s" : ""} con stock bajo (≤ {UMBRAL_STOCK_BAJO})
+              ⚠ {stockBajo.length} lote{stockBajo.length > 1 ? "s" : ""} con stock bajo (bajo su mínimo configurado)
             </p>
             <ul className="flex flex-col gap-1 text-sm text-brand-cream/80">
               {stockBajo.map((s) => (

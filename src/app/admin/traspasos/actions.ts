@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { query, withTransaction } from "@/lib/db";
+import { verificarUmbralYNotificar } from "@/lib/push";
 
 export interface RegistrarTraspasoResult {
   error?: string;
@@ -52,6 +53,7 @@ export async function registrarTraspasoAction(
   }
 
   const traspasoId = crypto.randomUUID();
+  let stockOrigenAntes = 0;
 
   try {
     await withTransaction(async (client) => {
@@ -63,6 +65,7 @@ export async function registrarTraspasoAction(
       if (cantidad > stock) {
         throw new Error(`STOCK_INSUFICIENTE:${stock}`);
       }
+      stockOrigenAntes = stock;
 
       const notaFinal = typeof nota === "string" && nota ? nota : null;
 
@@ -88,6 +91,8 @@ export async function registrarTraspasoAction(
     }
     throw err;
   }
+
+  await verificarUmbralYNotificar(loteOrigenId, stockOrigenAntes, stockOrigenAntes - cantidad);
 
   revalidatePath("/admin/traspasos");
   revalidatePath("/admin/inventario");

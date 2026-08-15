@@ -2,6 +2,7 @@
 
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
+import { verificarUmbralYNotificar } from "@/lib/push";
 
 interface LoteRow {
   id: number;
@@ -79,7 +80,9 @@ export async function registrarPiezaVentaAction(input: {
   }
 
   const piezas = await contarPiezasVenta(input.ventaId);
-  return { success: { piezas, stockRestante: stockActual - 1 } };
+  const stockRestante = stockActual - 1;
+  await verificarUmbralYNotificar(lote.id, stockActual, stockRestante);
+  return { success: { piezas, stockRestante } };
 }
 
 export interface DeshacerPiezaResult {

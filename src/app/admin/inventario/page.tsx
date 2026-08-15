@@ -4,7 +4,7 @@ import { query } from "@/lib/db";
 import Header from "@/components/Header";
 import AdminNav from "@/components/AdminNav";
 import EntradaForm from "./entrada-form";
-import { UMBRAL_STOCK_BAJO } from "@/lib/constants";
+import UmbralForm from "./umbral-form";
 
 interface StockRow {
   lote_id: number;
@@ -12,6 +12,7 @@ interface StockRow {
   precio_mxn: string;
   stock: number;
   sucursal_nombre: string;
+  umbral_stock: number;
 }
 
 export default async function AdminInventarioPage() {
@@ -19,9 +20,10 @@ export default async function AdminInventarioPage() {
   if (!session || session.user.rol === "vendedor") redirect("/login");
 
   const { rows: stock } = await query<StockRow>(
-    `SELECT sa.lote_id, sa.nombre, sa.precio_mxn, sa.stock, s.nombre AS sucursal_nombre
+    `SELECT sa.lote_id, sa.nombre, sa.precio_mxn, sa.stock, s.nombre AS sucursal_nombre, l.umbral_stock
      FROM stock_actual sa
      JOIN sucursales s ON s.id = sa.sucursal_id
+     JOIN lotes l ON l.id = sa.lote_id
      ORDER BY s.nombre, sa.precio_mxn`
   );
 
@@ -52,6 +54,7 @@ export default async function AdminInventarioPage() {
                 <th className="px-4 py-2">Sucursal</th>
                 <th className="px-4 py-2">Precio</th>
                 <th className="px-4 py-2">Stock</th>
+                <th className="px-4 py-2">Mínimo (alerta)</th>
               </tr>
             </thead>
             <tbody>
@@ -63,12 +66,15 @@ export default async function AdminInventarioPage() {
                     className={`px-4 py-2 ${
                       s.stock <= 0
                         ? "text-brand-red"
-                        : s.stock <= UMBRAL_STOCK_BAJO
+                        : s.stock <= s.umbral_stock
                           ? "text-yellow-500"
                           : ""
                     }`}
                   >
                     {s.stock}
+                  </td>
+                  <td className="px-4 py-2">
+                    <UmbralForm id={s.lote_id} umbralActual={s.umbral_stock} />
                   </td>
                 </tr>
               ))}

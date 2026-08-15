@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
+import { verificarUmbralYNotificar } from "@/lib/push";
 
 export interface RegistrarCorteResult {
   error?: string;
@@ -96,15 +97,13 @@ export async function registrarAjusteAction(
 
   const cantidad = direccion === "resta" ? -piezas : piezas;
 
-  if (cantidad < 0) {
-    const { rows: stockRows } = await query<{ stock: string }>(
-      "SELECT stock FROM stock_actual WHERE lote_id = $1",
-      [loteId]
-    );
-    const stock = Number(stockRows[0]?.stock ?? 0);
-    if (piezas > stock) {
-      return { error: `Stock insuficiente en Almacén: solo hay ${stock} piezas.` };
-    }
+  const { rows: stockRows } = await query<{ stock: string }>(
+    "SELECT stock FROM stock_actual WHERE lote_id = $1",
+    [loteId]
+  );
+  const stockAntes = Number(stockRows[0]?.stock ?? 0);
+  if (cantidad < 0 && piezas > stockAntes) {
+    return { error: `Stock insuficiente en Almacén: solo hay ${stockAntes} piezas.` };
   }
 
   await query(
@@ -112,6 +111,10 @@ export async function registrarAjusteAction(
      VALUES ($1, $2, 'ajuste', $3, $4, $5)`,
     [loteId, lote.sucursal_id, cantidad, Number(session.user.id), nota.trim()]
   );
+
+  if (cantidad < 0) {
+    await verificarUmbralYNotificar(loteId, stockAntes, stockAntes + cantidad);
+  }
 
   revalidatePath("/admin/corte");
   revalidatePath("/admin/inventario");

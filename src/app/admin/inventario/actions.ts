@@ -44,3 +44,32 @@ export async function registrarEntradaAction(
   revalidatePath("/inventario");
   return { success: `Entrada registrada: +${cantidad} piezas.` };
 }
+
+export interface ActualizarUmbralResult {
+  error?: string;
+  success?: string;
+}
+
+export async function actualizarUmbralAction(
+  _prevState: ActualizarUmbralResult | undefined,
+  formData: FormData
+): Promise<ActualizarUmbralResult> {
+  const session = await auth();
+  if (!session || session.user.rol === "vendedor") {
+    return { error: "No autorizado." };
+  }
+
+  const id = Number(formData.get("id"));
+  const umbral = Number(formData.get("umbral_stock"));
+
+  if (!id) return { error: "Precio inválido." };
+  if (!Number.isInteger(umbral) || umbral < 0) {
+    return { error: "El mínimo debe ser un número entero mayor o igual a 0." };
+  }
+
+  await query("UPDATE lotes SET umbral_stock = $1 WHERE id = $2", [umbral, id]);
+
+  revalidatePath("/admin/inventario");
+  revalidatePath("/admin/dashboard");
+  return { success: "Mínimo actualizado." };
+}
