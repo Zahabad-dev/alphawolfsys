@@ -8,8 +8,8 @@ import fs from "fs/promises";
 // comprometen la lectura (el contorno se dibuja AFUERA del QR, nunca sobre los módulos).
 const PROPORCION_LOGO = 0.22;
 const PROPORCION_PADDING = 0.18;
-const PROPORCION_BORDE = 0.07;
-const BORDE_MIN_PX = 14;
+const PROPORCION_BORDE = 0.03;
+const BORDE_MIN_PX = 6;
 
 export interface QrGenerado {
   buffer: Buffer;
