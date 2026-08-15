@@ -52,6 +52,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   session: {
     strategy: "jwt",
+    // Sin vencimiento práctico: el cliente no quiere que a nadie se le cierre
+    // la sesión sola (10 años).
+    maxAge: 315360000,
   },
   callbacks: {
     jwt: async ({ token, user }) => {

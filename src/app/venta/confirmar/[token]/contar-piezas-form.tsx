@@ -6,7 +6,7 @@ import QrScanner from "qr-scanner";
 import { extraerToken } from "@/lib/qr-token";
 import { registrarVentaAction } from "@/app/venta/actions";
 
-const COOLDOWN_MS = 900;
+const COOLDOWN_MS = 1800;
 
 export default function ContarPiezasForm({
   qrToken,

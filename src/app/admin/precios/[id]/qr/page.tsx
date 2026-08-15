@@ -84,7 +84,7 @@ export default async function PrecioQrPage({
         </div>
       ) : (
         <div
-          className="grid justify-center gap-x-3 gap-y-4 print:gap-x-2 print:gap-y-3"
+          className="grid w-full justify-center gap-x-3 gap-y-4 print:gap-x-2 print:gap-y-3"
           style={{ gridTemplateColumns: `repeat(auto-fill, ${outerCm}cm)` }}
         >
           {Array.from({ length: copias }).map((_, i) => (
