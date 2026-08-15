@@ -5,6 +5,13 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { query, withTransaction } from "@/lib/db";
 
+async function requireStaff() {
+  const session = await auth();
+  if (!session || session.user.rol === "vendedor") {
+    throw new Error("No autorizado");
+  }
+}
+
 async function requireAdmin() {
   const session = await auth();
   if (!session || session.user.rol !== "admin") {
@@ -21,7 +28,7 @@ export async function actualizarSucursalAction(
   _prevState: ActualizarSucursalResult | undefined,
   formData: FormData
 ): Promise<ActualizarSucursalResult> {
-  await requireAdmin();
+  await requireStaff();
 
   const id = Number(formData.get("id"));
   const nombre = formData.get("nombre");
@@ -87,7 +94,7 @@ export async function crearSucursalAction(
 }
 
 export async function toggleSucursalActivaAction(formData: FormData) {
-  await requireAdmin();
+  await requireStaff();
 
   const id = Number(formData.get("id"));
   const activa = formData.get("activa") === "true";

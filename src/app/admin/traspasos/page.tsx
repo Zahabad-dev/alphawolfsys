@@ -30,7 +30,7 @@ interface TraspasoRow {
 
 export default async function AdminTraspasosPage() {
   const session = await auth();
-  if (!session || session.user.rol !== "admin") redirect("/login");
+  if (!session || session.user.rol === "vendedor") redirect("/login");
 
   const [{ rows: stock }, { rows: sucursales }, { rows: recientes }] = await Promise.all([
     query<StockRow>(

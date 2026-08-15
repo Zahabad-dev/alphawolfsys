@@ -1,15 +1,17 @@
 import type { DefaultSession } from "next-auth";
 
+export type Rol = "admin" | "gerente" | "vendedor";
+
 declare module "next-auth" {
   interface User {
-    rol: "admin" | "vendedor";
+    rol: Rol;
     sucursalId: number | null;
   }
 
   interface Session {
     user: {
       id: string;
-      rol: "admin" | "vendedor";
+      rol: Rol;
       sucursalId: number | null;
     } & DefaultSession["user"];
   }
@@ -17,7 +19,7 @@ declare module "next-auth" {
 
 declare module "next-auth/jwt" {
   interface JWT {
-    rol?: "admin" | "vendedor";
+    rol?: Rol;
     sucursalId?: number | null;
   }
 }

@@ -12,6 +12,13 @@ async function requireAdmin() {
   }
 }
 
+async function requireStaff() {
+  const session = await auth();
+  if (!session || session.user.rol === "vendedor") {
+    throw new Error("No autorizado");
+  }
+}
+
 function etiquetaDe(precio: number) {
   return `$${precio.toFixed(2)}`;
 }
@@ -65,7 +72,7 @@ export async function asignarPrecioAction(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
-  await requireAdmin();
+  await requireStaff();
 
   const precioMxn = formData.get("precio_mxn");
   const sucursalDestinoId = Number(formData.get("sucursal_destino_id"));
@@ -112,7 +119,7 @@ export async function actualizarPrecioAction(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
-  await requireAdmin();
+  await requireStaff();
 
   const id = Number(formData.get("id"));
   const precioNum = Number(formData.get("precio_mxn"));
@@ -133,7 +140,7 @@ export async function actualizarPrecioAction(
 }
 
 export async function togglePrecioActivoAction(formData: FormData) {
-  await requireAdmin();
+  await requireStaff();
 
   const id = Number(formData.get("id"));
   const activo = formData.get("activo") === "true";

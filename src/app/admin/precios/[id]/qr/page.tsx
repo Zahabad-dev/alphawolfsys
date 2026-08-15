@@ -27,7 +27,7 @@ export default async function PrecioQrPage({
   const sp = await searchParams;
 
   const session = await auth();
-  if (!session || session.user.rol !== "admin") redirect("/login");
+  if (!session || session.user.rol === "vendedor") redirect("/login");
 
   const { rows } = await query<PrecioRow>(
     `SELECT l.id, l.precio_mxn, l.qr_token, s.clave AS sucursal_clave

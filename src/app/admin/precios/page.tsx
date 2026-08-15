@@ -27,7 +27,7 @@ interface SucursalRow {
 
 export default async function AdminPreciosPage() {
   const session = await auth();
-  if (!session || session.user.rol !== "admin") redirect("/login");
+  if (!session || session.user.rol === "vendedor") redirect("/login");
 
   const [{ rows: precios }, { rows: sucursales }] = await Promise.all([
     query<PrecioRow>(

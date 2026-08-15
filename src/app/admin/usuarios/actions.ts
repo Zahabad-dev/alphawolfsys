@@ -13,6 +13,14 @@ async function requireAdmin() {
   return session;
 }
 
+async function requireStaff() {
+  const session = await auth();
+  if (!session || session.user.rol === "vendedor") {
+    throw new Error("No autorizado");
+  }
+  return session;
+}
+
 export interface CrearVendedorResult {
   error?: string;
   success?: string;
@@ -27,7 +35,8 @@ export async function crearVendedorAction(
   const username = formData.get("username");
   const nombre = formData.get("nombre");
   const password = formData.get("password");
-  const sucursalId = Number(formData.get("sucursal_id"));
+  const rol = formData.get("rol") === "gerente" ? "gerente" : "vendedor";
+  const sucursalId = rol === "vendedor" ? Number(formData.get("sucursal_id")) : null;
 
   if (typeof username !== "string" || !username.trim()) {
     return { error: "El usuario es obligatorio." };
@@ -38,7 +47,7 @@ export async function crearVendedorAction(
   if (typeof password !== "string" || password.length < 8) {
     return { error: "La contraseña debe tener al menos 8 caracteres." };
   }
-  if (!sucursalId) {
+  if (rol === "vendedor" && !sucursalId) {
     return { error: "Selecciona una sucursal." };
   }
 
@@ -47,8 +56,8 @@ export async function crearVendedorAction(
   try {
     await query(
       `INSERT INTO usuarios (username, password_hash, nombre, rol, sucursal_id)
-       VALUES ($1, $2, $3, 'vendedor', $4)`,
-      [username.trim(), passwordHash, nombre.trim(), sucursalId]
+       VALUES ($1, $2, $3, $4, $5)`,
+      [username.trim(), passwordHash, nombre.trim(), rol, sucursalId]
     );
   } catch (err) {
     const pgError = err as { code?: string };
@@ -59,11 +68,11 @@ export async function crearVendedorAction(
   }
 
   revalidatePath("/admin/usuarios");
-  return { success: `Vendedor "${nombre}" creado.` };
+  return { success: `${rol === "gerente" ? "Gerente" : "Vendedor"} "${nombre}" creado.` };
 }
 
 export async function toggleUsuarioActivoAction(formData: FormData) {
-  await requireAdmin();
+  await requireStaff();
 
   const id = Number(formData.get("id"));
   const activo = formData.get("activo") === "true";
@@ -73,7 +82,7 @@ export async function toggleUsuarioActivoAction(formData: FormData) {
 }
 
 export async function reasignarSucursalAction(formData: FormData) {
-  await requireAdmin();
+  await requireStaff();
 
   const id = Number(formData.get("id"));
   const sucursalId = Number(formData.get("sucursal_id"));

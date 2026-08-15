@@ -41,7 +41,7 @@ function money(v: string | number) {
 
 export default async function AdminDashboardPage() {
   const session = await auth();
-  if (!session || session.user.rol !== "admin") redirect("/login");
+  if (!session || session.user.rol === "vendedor") redirect("/login");
 
   const [{ rows: resumenRows }, { rows: porSucursal }, { rows: topLotes }, { rows: stockBajo }] =
     await Promise.all([

@@ -13,7 +13,7 @@ interface StockRow {
 
 export default async function AdminCortePage() {
   const session = await auth();
-  if (!session || session.user.rol !== "admin") redirect("/login");
+  if (!session || session.user.rol === "vendedor") redirect("/login");
 
   const { rows: stock } = await query<StockRow>(
     `SELECT sa.lote_id, sa.precio_mxn, sa.stock

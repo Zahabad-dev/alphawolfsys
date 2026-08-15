@@ -24,7 +24,7 @@ interface VendedorRow {
 
 export default async function AdminSucursalesPage() {
   const session = await auth();
-  if (!session || session.user.rol !== "admin") redirect("/login");
+  if (!session || session.user.rol === "vendedor") redirect("/login");
 
   const [{ rows: sucursales }, { rows: vendedores }] = await Promise.all([
     query<SucursalRow>("SELECT id, clave, nombre, estado, tipo, activa FROM sucursales ORDER BY tipo, nombre"),

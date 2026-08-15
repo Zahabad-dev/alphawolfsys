@@ -2,13 +2,14 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { query } from "@/lib/db";
+import type { Rol } from "@/types/next-auth";
 
 interface UsuarioRow {
   id: number;
   username: string;
   password_hash: string;
   nombre: string;
-  rol: "admin" | "vendedor";
+  rol: Rol;
   sucursal_id: number | null;
 }
 
@@ -63,7 +64,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     session: async ({ session, token }) => {
       if (session.user) {
         session.user.id = token.sub as string;
-        session.user.rol = token.rol as "admin" | "vendedor";
+        session.user.rol = token.rol as Rol;
         session.user.sucursalId = token.sucursalId as number | null;
       }
       return session;

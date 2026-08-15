@@ -10,7 +10,7 @@ interface StockRow {
 
 export async function GET() {
   const session = await auth();
-  if (!session || session.user.rol !== "admin") {
+  if (!session || session.user.rol === "vendedor") {
     return new Response("No autorizado", { status: 403 });
   }
 

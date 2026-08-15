@@ -26,7 +26,7 @@ export default async function AdminRankingPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const session = await auth();
-  if (!session || session.user.rol !== "admin") redirect("/login");
+  if (!session || session.user.rol === "vendedor") redirect("/login");
 
   const sp = await searchParams;
   const desde = typeof sp.desde === "string" && sp.desde ? sp.desde : primerDiaDelMes();

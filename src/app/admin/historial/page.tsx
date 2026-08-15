@@ -36,7 +36,7 @@ export default async function AdminHistorialPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const session = await auth();
-  if (!session || session.user.rol !== "admin") redirect("/login");
+  if (!session || session.user.rol === "vendedor") redirect("/login");
 
   const sp = await searchParams;
   const sucursalId = typeof sp.sucursal_id === "string" ? sp.sucursal_id : "";

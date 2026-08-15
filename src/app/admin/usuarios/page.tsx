@@ -25,7 +25,7 @@ interface SucursalRow {
 
 export default async function AdminUsuariosPage() {
   const session = await auth();
-  if (!session || session.user.rol !== "admin") redirect("/login");
+  if (!session || session.user.rol === "vendedor") redirect("/login");
 
   const [{ rows: usuarios }, { rows: sucursales }] = await Promise.all([
     query<UsuarioRow>(

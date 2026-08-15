@@ -14,7 +14,7 @@ export async function registrarCorteAction(
   formData: FormData
 ): Promise<RegistrarCorteResult> {
   const session = await auth();
-  if (!session || session.user.rol !== "admin") {
+  if (!session || session.user.rol === "vendedor") {
     return { error: "No autorizado." };
   }
 

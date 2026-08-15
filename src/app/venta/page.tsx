@@ -20,7 +20,7 @@ export default async function VentaPage() {
   const session = await auth();
   const user = session!.user;
 
-  if (user.rol === "admin") {
+  if (user.rol !== "vendedor") {
     redirect("/admin/dashboard");
   }
 

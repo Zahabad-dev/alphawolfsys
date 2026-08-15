@@ -15,7 +15,7 @@ export async function registrarTraspasoAction(
   formData: FormData
 ): Promise<RegistrarTraspasoResult> {
   const session = await auth();
-  if (!session || session.user.rol !== "admin") {
+  if (!session || session.user.rol === "vendedor") {
     return { error: "No autorizado." };
   }
 
