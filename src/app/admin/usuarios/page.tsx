@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import AdminNav from "@/components/AdminNav";
 import NuevoVendedorForm from "./nuevo-vendedor-form";
 import SucursalSelect from "./sucursal-select";
+import EliminarVendedorForm from "./eliminar-vendedor-form";
 import { toggleUsuarioActivoAction } from "./actions";
 
 interface UsuarioRow {
@@ -81,16 +82,21 @@ export default async function AdminUsuariosPage() {
                   </td>
                   <td className="px-4 py-2">
                     {u.rol === "vendedor" && (
-                      <form action={toggleUsuarioActivoAction}>
-                        <input type="hidden" name="id" value={u.id} />
-                        <input type="hidden" name="activo" value={String(u.activo)} />
-                        <button
-                          type="submit"
-                          className="text-sm text-brand-cream/70 underline hover:text-brand-gold"
-                        >
-                          {u.activo ? "Desactivar" : "Activar"}
-                        </button>
-                      </form>
+                      <div className="flex flex-col items-start gap-2">
+                        <div className="flex items-center gap-3">
+                          <form action={toggleUsuarioActivoAction}>
+                            <input type="hidden" name="id" value={u.id} />
+                            <input type="hidden" name="activo" value={String(u.activo)} />
+                            <button
+                              type="submit"
+                              className="text-sm text-brand-cream/70 underline hover:text-brand-gold"
+                            >
+                              {u.activo ? "Desactivar" : "Activar"}
+                            </button>
+                          </form>
+                          <EliminarVendedorForm id={u.id} username={u.username} />
+                        </div>
+                      </div>
                     )}
                   </td>
                 </tr>

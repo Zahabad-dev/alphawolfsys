@@ -17,13 +17,28 @@ interface SucursalRow {
   activa: boolean;
 }
 
+interface VendedorRow {
+  sucursal_id: number;
+  username: string;
+}
+
 export default async function AdminSucursalesPage() {
   const session = await auth();
   if (!session || session.user.rol !== "admin") redirect("/login");
 
-  const { rows: sucursales } = await query<SucursalRow>(
-    "SELECT id, clave, nombre, estado, tipo, activa FROM sucursales ORDER BY tipo, nombre"
-  );
+  const [{ rows: sucursales }, { rows: vendedores }] = await Promise.all([
+    query<SucursalRow>("SELECT id, clave, nombre, estado, tipo, activa FROM sucursales ORDER BY tipo, nombre"),
+    query<VendedorRow>(
+      "SELECT sucursal_id, username FROM usuarios WHERE rol = 'vendedor' AND sucursal_id IS NOT NULL"
+    ),
+  ]);
+
+  const vendedoresPorSucursal = new Map<number, string[]>();
+  for (const v of vendedores) {
+    const lista = vendedoresPorSucursal.get(v.sucursal_id) ?? [];
+    lista.push(v.username);
+    vendedoresPorSucursal.set(v.sucursal_id, lista);
+  }
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -60,7 +75,14 @@ export default async function AdminSucursalesPage() {
                     {s.activa ? "Desactivar" : "Activar"}
                   </button>
                 </form>
-                <EliminarSucursalForm id={s.id} nombre={s.nombre} />
+                <EliminarSucursalForm
+                  id={s.id}
+                  nombre={s.nombre}
+                  vendedores={vendedoresPorSucursal.get(s.id) ?? []}
+                  otrasSucursales={sucursales
+                    .filter((otra) => otra.id !== s.id && otra.tipo === "sucursal")
+                    .map((otra) => ({ id: otra.id, nombre: otra.nombre }))}
+                />
               </div>
             </div>
           </div>

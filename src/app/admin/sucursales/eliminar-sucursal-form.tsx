@@ -6,11 +6,16 @@ import { eliminarSucursalAction, type EliminarSucursalResult } from "./actions";
 export default function EliminarSucursalForm({
   id,
   nombre,
+  vendedores,
+  otrasSucursales,
 }: {
   id: number;
   nombre: string;
+  vendedores: string[];
+  otrasSucursales: { id: number; nombre: string }[];
 }) {
   const [abierto, setAbierto] = useState(false);
+  const [accion, setAccion] = useState<"reasignar" | "eliminar">("reasignar");
   const [state, formAction, pending] = useActionState<EliminarSucursalResult | undefined, FormData>(
     eliminarSucursalAction,
     undefined
@@ -35,9 +40,51 @@ export default function EliminarSucursalForm({
     >
       <input type="hidden" name="id" value={id} />
       <p className="text-xs text-brand-cream/70">
-        Escribe exactamente <strong>{nombre}</strong> y tu contraseña para confirmar. Esto borra
-        también sus precios y su historial de movimientos — no se puede deshacer.
+        Esto también elimina todos los precios (QR) y el historial de movimientos de{" "}
+        <strong>{nombre}</strong>. No se puede deshacer.
       </p>
+
+      {vendedores.length > 0 && (
+        <div className="flex flex-col gap-2 rounded-lg border border-white/10 p-2">
+          <p className="text-xs text-brand-cream/70">
+            Tiene {vendedores.length} vendedor(es) asignado(s): {vendedores.join(", ")}. ¿Qué
+            hacer con ellos?
+          </p>
+          <label className="flex items-center gap-2 text-xs text-brand-cream/80">
+            <input
+              type="radio"
+              name="accion_vendedores"
+              value="reasignar"
+              checked={accion === "reasignar"}
+              onChange={() => setAccion("reasignar")}
+            />
+            Reasignarlos a:
+            <select
+              name="sucursal_destino_id"
+              disabled={accion !== "reasignar"}
+              className="rounded-lg border border-white/10 bg-brand-gray2 px-2 py-1 text-xs text-brand-cream disabled:opacity-40"
+            >
+              <option value="">Selecciona...</option>
+              {otrasSucursales.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nombre}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-xs text-brand-cream/80">
+            <input
+              type="radio"
+              name="accion_vendedores"
+              value="eliminar"
+              checked={accion === "eliminar"}
+              onChange={() => setAccion("eliminar")}
+            />
+            Eliminar también sus cuentas (falla si ya tienen ventas registradas)
+          </label>
+        </div>
+      )}
+
       <input
         name="nombre_confirmacion"
         type="text"

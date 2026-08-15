@@ -141,26 +141,55 @@ export async function eliminarSucursalAction(
     return { error: `Escribe exactamente "${sucursal.nombre}" para confirmar.` };
   }
 
-  const { rows: vendedoresRows } = await query<{ username: string }>(
-    "SELECT username FROM usuarios WHERE sucursal_id = $1",
+  const { rows: vendedoresRows } = await query<{ id: number; username: string }>(
+    "SELECT id, username FROM usuarios WHERE sucursal_id = $1",
     [id]
   );
+
+  const accionVendedores = formData.get("accion_vendedores");
+  const sucursalDestinoId = Number(formData.get("sucursal_destino_id"));
+
   if (vendedoresRows.length > 0) {
-    return {
-      error: `No se puede eliminar: tiene ${vendedoresRows.length} vendedor(es) asignado(s) (${vendedoresRows
-        .map((v) => v.username)
-        .join(", ")}). Reasígnalos a otra sucursal primero en Vendedores.`,
-    };
+    if (accionVendedores === "reasignar") {
+      if (!sucursalDestinoId || sucursalDestinoId === id) {
+        return { error: "Selecciona una sucursal destino distinta para los vendedores." };
+      }
+    } else if (accionVendedores !== "eliminar") {
+      return { error: "Elige qué hacer con los vendedores de esta sucursal." };
+    }
   }
 
-  await withTransaction(async (client) => {
-    await client.query("DELETE FROM movimientos_inventario WHERE sucursal_id = $1", [id]);
-    await client.query("DELETE FROM lotes WHERE sucursal_id = $1", [id]);
-    await client.query("DELETE FROM sucursales WHERE id = $1", [id]);
-  });
+  try {
+    await withTransaction(async (client) => {
+      if (vendedoresRows.length > 0) {
+        if (accionVendedores === "reasignar") {
+          await client.query("UPDATE usuarios SET sucursal_id = $1 WHERE sucursal_id = $2", [
+            sucursalDestinoId,
+            id,
+          ]);
+        } else {
+          await client.query("DELETE FROM usuarios WHERE sucursal_id = $1", [id]);
+        }
+      }
+      await client.query("DELETE FROM movimientos_inventario WHERE sucursal_id = $1", [id]);
+      await client.query("DELETE FROM lotes WHERE sucursal_id = $1", [id]);
+      await client.query("DELETE FROM sucursales WHERE id = $1", [id]);
+    });
+  } catch (err) {
+    const pgError = err as { code?: string };
+    if (pgError.code === "23503") {
+      return {
+        error: `Algunos vendedores (${vendedoresRows
+          .map((v) => v.username)
+          .join(", ")}) ya tienen ventas registradas y no se pueden eliminar sin perder ese historial. Usa "Reasignar" en vez de "Eliminar".`,
+      };
+    }
+    throw err;
+  }
 
   revalidatePath("/admin/sucursales");
   revalidatePath("/admin/precios");
   revalidatePath("/admin/inventario");
-  return { success: `Sucursal "${sucursal.nombre}" eliminada.` };
+  revalidatePath("/admin/usuarios");
+  return { success: `Sucursal "${sucursal.nombre}" eliminada (junto con sus precios).` };
 }

@@ -10,6 +10,7 @@ async function requireAdmin() {
   if (!session || session.user.rol !== "admin") {
     throw new Error("No autorizado");
   }
+  return session;
 }
 
 export interface CrearVendedorResult {
@@ -83,4 +84,63 @@ export async function reasignarSucursalAction(formData: FormData) {
     id,
   ]);
   revalidatePath("/admin/usuarios");
+}
+
+export interface EliminarVendedorResult {
+  error?: string;
+  success?: string;
+}
+
+export async function eliminarVendedorAction(
+  _prevState: EliminarVendedorResult | undefined,
+  formData: FormData
+): Promise<EliminarVendedorResult> {
+  const session = await requireAdmin();
+
+  const id = Number(formData.get("id"));
+  const usernameConfirmacion = formData.get("username_confirmacion");
+  const password = formData.get("password");
+
+  if (!id) return { error: "Vendedor inválido." };
+  if (typeof password !== "string" || !password) {
+    return { error: "Escribe tu contraseña para confirmar." };
+  }
+
+  const { rows: adminRows } = await query<{ password_hash: string }>(
+    "SELECT password_hash FROM usuarios WHERE id = $1",
+    [Number(session.user.id)]
+  );
+  const passwordValida = adminRows[0]
+    ? await bcrypt.compare(password, adminRows[0].password_hash)
+    : false;
+  if (!passwordValida) {
+    return { error: "Contraseña incorrecta." };
+  }
+
+  const { rows: vendedorRows } = await query<{ username: string; rol: string }>(
+    "SELECT username, rol FROM usuarios WHERE id = $1",
+    [id]
+  );
+  const vendedor = vendedorRows[0];
+  if (!vendedor) return { error: "Vendedor no encontrado." };
+  if (vendedor.rol !== "vendedor") return { error: "Solo se pueden eliminar cuentas de vendedor." };
+
+  if (typeof usernameConfirmacion !== "string" || usernameConfirmacion !== vendedor.username) {
+    return { error: `Escribe exactamente "${vendedor.username}" para confirmar.` };
+  }
+
+  try {
+    await query("DELETE FROM usuarios WHERE id = $1", [id]);
+  } catch (err) {
+    const pgError = err as { code?: string };
+    if (pgError.code === "23503") {
+      return {
+        error: `"${vendedor.username}" ya tiene ventas u otros movimientos registrados — no se puede eliminar sin perder ese historial. Desactívalo en vez de eliminarlo.`,
+      };
+    }
+    throw err;
+  }
+
+  revalidatePath("/admin/usuarios");
+  return { success: `Vendedor "${vendedor.username}" eliminado.` };
 }
