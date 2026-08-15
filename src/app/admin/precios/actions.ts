@@ -11,6 +11,14 @@ async function requireAdmin() {
   }
 }
 
+function etiquetaDe(precio: number) {
+  return `$${precio.toFixed(2)}`;
+}
+
+/**
+ * Los precios nuevos SIEMPRE nacen en el Almacén Central — es el catálogo
+ * maestro. Para que una sucursal los use, hay que "asignarlos" (ver abajo).
+ */
 export async function crearPrecioAction(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
@@ -18,36 +26,109 @@ export async function crearPrecioAction(
   await requireAdmin();
 
   const precio = formData.get("precio_mxn");
-  const sucursalId = formData.get("sucursal_id");
-
   const precioNum = Number(precio);
   if (!precioNum || precioNum <= 0) {
     return { error: "El precio debe ser mayor a 0." };
   }
-  const sucursalIdNum = Number(sucursalId);
-  if (!sucursalIdNum) {
-    return { error: "Selecciona una sucursal." };
+
+  const { rows: almacenRows } = await query<{ id: number }>(
+    "SELECT id FROM sucursales WHERE tipo = 'almacen' LIMIT 1"
+  );
+  const almacenId = almacenRows[0]?.id;
+  if (!almacenId) return { error: "No se encontró el Almacén Central." };
+
+  const { rows: existentes } = await query(
+    "SELECT id FROM lotes WHERE sucursal_id = $1 AND precio_mxn = $2 AND activo = true",
+    [almacenId, precioNum]
+  );
+  if (existentes.length > 0) {
+    return { error: "El Almacén ya tiene ese precio activo." };
+  }
+
+  await query("INSERT INTO lotes (nombre, precio_mxn, sucursal_id) VALUES ($1, $2, $3)", [
+    etiquetaDe(precioNum),
+    precioNum,
+    almacenId,
+  ]);
+
+  revalidatePath("/admin/precios");
+  return { success: "Precio agregado al Almacén." };
+}
+
+/**
+ * Toma un precio ya existente en el Almacén y crea su propia copia (con su
+ * propio QR) en una sucursal. A partir de ahí esa copia se puede editar
+ * independientemente (variación por sucursal) sin afectar al del Almacén.
+ */
+export async function asignarPrecioAction(
+  _prevState: { error?: string; success?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string; success?: string }> {
+  await requireAdmin();
+
+  const precioMxn = formData.get("precio_mxn");
+  const sucursalDestinoId = Number(formData.get("sucursal_destino_id"));
+
+  const precioNum = Number(precioMxn);
+  if (!precioNum || precioNum <= 0) {
+    return { error: "Selecciona un precio del Almacén." };
+  }
+  if (!sucursalDestinoId) {
+    return { error: "Selecciona la sucursal destino." };
+  }
+
+  const { rows: destinoRows } = await query<{ tipo: string }>(
+    "SELECT tipo FROM sucursales WHERE id = $1",
+    [sucursalDestinoId]
+  );
+  if (destinoRows[0]?.tipo !== "sucursal") {
+    return { error: "El destino debe ser una sucursal (no el Almacén)." };
   }
 
   const { rows: existentes } = await query(
     "SELECT id FROM lotes WHERE sucursal_id = $1 AND precio_mxn = $2 AND activo = true",
-    [sucursalIdNum, precioNum]
+    [sucursalDestinoId, precioNum]
   );
   if (existentes.length > 0) {
-    return { error: "Esa sucursal ya tiene un precio activo con ese mismo monto." };
+    return { error: "Esa sucursal ya tiene ese precio asignado." };
   }
 
-  // La etiqueta se genera del precio — ya no se pide un nombre libre (evita
-  // confusiones tipo "Lote AB"; lo único que identifica un precio es su monto).
-  const etiqueta = `$${precioNum.toFixed(2)}`;
-
-  await query(
-    "INSERT INTO lotes (nombre, precio_mxn, sucursal_id) VALUES ($1, $2, $3)",
-    [etiqueta, precioNum, sucursalIdNum]
-  );
+  await query("INSERT INTO lotes (nombre, precio_mxn, sucursal_id) VALUES ($1, $2, $3)", [
+    etiquetaDe(precioNum),
+    precioNum,
+    sucursalDestinoId,
+  ]);
 
   revalidatePath("/admin/precios");
-  return { success: "Precio agregado." };
+  return { success: `Precio de $${precioNum.toFixed(2)} asignado.` };
+}
+
+/**
+ * Ajusta el precio de una copia ya asignada a una sucursal (variación local),
+ * sin tocar el precio original en el Almacén.
+ */
+export async function actualizarPrecioAction(
+  _prevState: { error?: string; success?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string; success?: string }> {
+  await requireAdmin();
+
+  const id = Number(formData.get("id"));
+  const precioNum = Number(formData.get("precio_mxn"));
+
+  if (!id) return { error: "Precio inválido." };
+  if (!precioNum || precioNum <= 0) {
+    return { error: "El precio debe ser mayor a 0." };
+  }
+
+  await query("UPDATE lotes SET precio_mxn = $1, nombre = $2 WHERE id = $3", [
+    precioNum,
+    etiquetaDe(precioNum),
+    id,
+  ]);
+
+  revalidatePath("/admin/precios");
+  return { success: "Precio actualizado." };
 }
 
 export async function togglePrecioActivoAction(formData: FormData) {

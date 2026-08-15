@@ -5,6 +5,8 @@ import { query } from "@/lib/db";
 import Header from "@/components/Header";
 import AdminNav from "@/components/AdminNav";
 import NuevoPrecioForm from "./nuevo-precio-form";
+import AsignarPrecioForm from "./asignar-precio-form";
+import EditarPrecioForm from "./editar-precio-form";
 import { togglePrecioActivoAction } from "./actions";
 
 interface PrecioRow {
@@ -33,7 +35,9 @@ export default async function AdminPreciosPage() {
        FROM lotes l JOIN sucursales s ON s.id = l.sucursal_id
        ORDER BY s.tipo, s.nombre, l.precio_mxn`
     ),
-    query<SucursalRow>("SELECT id, nombre FROM sucursales WHERE activa = true ORDER BY nombre"),
+    query<SucursalRow>(
+      "SELECT id, nombre FROM sucursales WHERE activa = true AND tipo = 'sucursal' ORDER BY nombre"
+    ),
   ]);
 
   const grupos = new Map<
@@ -51,12 +55,24 @@ export default async function AdminPreciosPage() {
     grupos.set(p.sucursal_id, grupo);
   }
 
+  const preciosAlmacen = precios
+    .filter((p) => p.sucursal_tipo === "almacen" && p.activo)
+    .map((p) => Number(p.precio_mxn));
+
   return (
     <div className="flex min-h-screen flex-col">
-      <Header titulo="Precios" subtitulo="Un QR por precio y sucursal" />
+      <Header titulo="Precios" subtitulo="El Almacén es el catálogo — de ahí se asignan a cada sucursal" />
       <AdminNav />
       <main className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
-        <NuevoPrecioForm sucursales={sucursales} />
+        <NuevoPrecioForm />
+
+        {preciosAlmacen.length === 0 ? (
+          <p className="rounded-2xl border border-white/10 bg-brand-gray2 p-4 text-sm text-brand-cream/70">
+            Agrega al menos un precio al Almacén arriba antes de poder asignarlo a una sucursal.
+          </p>
+        ) : (
+          <AsignarPrecioForm preciosAlmacen={preciosAlmacen} sucursales={sucursales} />
+        )}
 
         {grupos.size === 0 && (
           <p className="rounded-2xl border border-white/10 bg-brand-gray2 p-4 text-center text-sm text-brand-cream/50">
@@ -77,7 +93,7 @@ export default async function AdminPreciosPage() {
                 <span className="font-semibold">{grupo.nombre}</span>
                 {grupo.tipo === "almacen" && (
                   <span className="rounded-full bg-brand-gold/20 px-3 py-1 text-xs text-brand-gold">
-                    Almacén
+                    Almacén — catálogo
                   </span>
                 )}
                 <span className="ml-auto text-sm text-brand-cream/50">
@@ -98,7 +114,9 @@ export default async function AdminPreciosPage() {
                   <tbody>
                     {grupo.precios.map((p) => (
                       <tr key={p.id} className="border-t border-white/10">
-                        <td className="px-4 py-2">${Number(p.precio_mxn).toFixed(2)}</td>
+                        <td className="px-4 py-2">
+                          <EditarPrecioForm id={p.id} precioActual={Number(p.precio_mxn)} />
+                        </td>
                         <td className="px-4 py-2">
                           {p.activo ? (
                             <span className="text-brand-green">Activo</span>

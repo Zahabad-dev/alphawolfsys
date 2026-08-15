@@ -3,11 +3,7 @@
 import { useActionState } from "react";
 import { crearPrecioAction } from "./actions";
 
-export default function NuevoPrecioForm({
-  sucursales,
-}: {
-  sucursales: { id: number; nombre: string }[];
-}) {
+export default function NuevoPrecioForm() {
   const [state, formAction, pending] = useActionState(crearPrecioAction, undefined);
 
   return (
@@ -16,7 +12,7 @@ export default function NuevoPrecioForm({
       className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-brand-gray2 p-4 sm:flex-row sm:items-end"
     >
       <label className="flex flex-col gap-1 text-sm text-brand-cream/80">
-        Precio (MXN)
+        Precio nuevo para el Almacén (MXN)
         <input
           name="precio_mxn"
           type="number"
@@ -24,24 +20,8 @@ export default function NuevoPrecioForm({
           step="0.01"
           required
           placeholder="185.00"
-          className="w-32 rounded-lg border border-white/10 bg-brand-black px-3 py-2 text-brand-cream outline-none focus:border-brand-gold"
+          className="w-40 rounded-lg border border-white/10 bg-brand-black px-3 py-2 text-brand-cream outline-none focus:border-brand-gold"
         />
-      </label>
-
-      <label className="flex flex-1 flex-col gap-1 text-sm text-brand-cream/80">
-        Sucursal
-        <select
-          name="sucursal_id"
-          required
-          className="rounded-lg border border-white/10 bg-brand-black px-3 py-2 text-brand-cream outline-none focus:border-brand-gold"
-        >
-          <option value="">Selecciona...</option>
-          {sucursales.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.nombre}
-            </option>
-          ))}
-        </select>
       </label>
 
       <button
@@ -49,7 +29,7 @@ export default function NuevoPrecioForm({
         disabled={pending}
         className="rounded-full bg-brand-gold px-6 py-2 font-semibold text-brand-black transition-opacity disabled:opacity-60"
       >
-        {pending ? "Agregando..." : "Agregar precio"}
+        {pending ? "Agregando..." : "Agregar al Almacén"}
       </button>
 
       {state?.error && <p className="w-full text-sm text-brand-red">{state.error}</p>}
