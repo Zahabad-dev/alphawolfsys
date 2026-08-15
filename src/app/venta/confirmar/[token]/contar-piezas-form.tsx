@@ -4,23 +4,18 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import QrScanner from "qr-scanner";
 import { extraerToken } from "@/lib/qr-token";
-import { MINIMO_VENTA_MAYOREO } from "@/lib/constants";
-import {
-  registrarPiezaVentaAction,
-  deshacerUltimaPiezaAction,
-  cancelarVentaAction,
-} from "@/app/venta/actions";
+import { registrarVentaAction } from "@/app/venta/actions";
 
 const COOLDOWN_MS = 900;
 
 export default function ContarPiezasForm({
   qrToken,
-  ventaId,
+  idempotencyKey,
   precio,
   stockInicial,
 }: {
   qrToken: string;
-  ventaId: string;
+  idempotencyKey: string;
   precio: number;
   stockInicial: number;
 }) {
@@ -30,17 +25,16 @@ export default function ContarPiezasForm({
   const router = useRouter();
 
   const [piezas, setPiezas] = useState(0);
-  const [stockRestante, setStockRestante] = useState(stockInicial);
   const [aviso, setAviso] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [finalizado, setFinalizado] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [resultado, setResultado] = useState<{ cantidad: number; total: number } | null>(null);
 
   useEffect(() => {
-    if (finalizado || !videoRef.current) return;
+    if (resultado || !videoRef.current) return;
 
     const scanner = new QrScanner(
       videoRef.current,
-      async (result) => {
+      (result) => {
         if (bloqueadoRef.current) return;
 
         const token = extraerToken(result.data);
@@ -49,24 +43,16 @@ export default function ContarPiezasForm({
           return;
         }
 
-        bloqueadoRef.current = true;
-        setBusy(true);
         setAviso(null);
-
-        const respuesta = await registrarPiezaVentaAction({
-          qrToken,
-          ventaId,
-          idempotencyKey: crypto.randomUUID(),
+        setPiezas((actual) => {
+          if (actual >= stockInicial) {
+            setAviso(`Ya contaste todo el stock disponible (${stockInicial} piezas).`);
+            return actual;
+          }
+          return actual + 1;
         });
 
-        if (respuesta.error) {
-          setAviso(respuesta.error);
-        } else if (respuesta.success) {
-          setPiezas(respuesta.success.piezas);
-          setStockRestante(respuesta.success.stockRestante);
-        }
-
-        setBusy(false);
+        bloqueadoRef.current = true;
         setTimeout(() => {
           bloqueadoRef.current = false;
         }, COOLDOWN_MS);
@@ -83,35 +69,37 @@ export default function ContarPiezasForm({
       scanner.stop();
       scanner.destroy();
     };
-  }, [qrToken, ventaId, finalizado]);
+  }, [qrToken, stockInicial, resultado]);
 
-  async function quitarUltimaPieza() {
-    setBusy(true);
-    const respuesta = await deshacerUltimaPiezaAction({ ventaId });
-    if (respuesta.error) {
-      setAviso(respuesta.error);
-    } else if (respuesta.success) {
-      setPiezas(respuesta.success.piezas);
-      setStockRestante((s) => s + 1);
-    }
-    setBusy(false);
+  function quitarUltimaPieza() {
+    setPiezas((actual) => Math.max(0, actual - 1));
   }
 
-  async function cancelarVenta() {
-    setBusy(true);
-    await cancelarVentaAction({ ventaId });
+  function cancelarVenta() {
     router.push("/venta");
   }
 
-  const total = piezas * precio;
-  const faltan = Math.max(0, MINIMO_VENTA_MAYOREO - piezas);
+  async function finalizarVenta() {
+    setPending(true);
+    setAviso(null);
+    const respuesta = await registrarVentaAction({ qrToken, cantidad: piezas, idempotencyKey });
+    if (respuesta.error) {
+      setAviso(respuesta.error);
+      setPending(false);
+      return;
+    }
+    if (respuesta.success) setResultado(respuesta.success);
+    setPending(false);
+  }
 
-  if (finalizado) {
+  const total = piezas * precio;
+
+  if (resultado) {
     return (
       <div className="flex flex-col items-center gap-4 rounded-2xl border border-white/10 bg-brand-gray2 p-8 text-center">
         <p className="text-xl text-brand-gold">Venta registrada</p>
         <p className="text-brand-cream">
-          {piezas} piezas × ${precio.toFixed(2)} = ${total.toFixed(2)}
+          {resultado.cantidad} piezas × ${precio.toFixed(2)} = ${resultado.total.toFixed(2)}
         </p>
         <a
           href="/venta/escanear"
@@ -130,11 +118,9 @@ export default function ContarPiezasForm({
       <div className="rounded-2xl border border-white/10 bg-brand-gray2 p-4 text-center">
         <p className="text-2xl font-semibold text-brand-gold">${precio.toFixed(2)} MXN</p>
         <p className="mt-2 text-4xl font-bold text-brand-cream">{piezas}</p>
-        <p className="text-sm text-brand-cream/70">
-          piezas contadas {faltan > 0 && `— faltan ${faltan} para el mínimo`}
-        </p>
+        <p className="text-sm text-brand-cream/70">piezas contadas</p>
         <p className="mt-2 text-brand-cream">Total: ${total.toFixed(2)}</p>
-        <p className="text-xs text-brand-cream/50">Stock restante: {stockRestante}</p>
+        <p className="text-xs text-brand-cream/50">Stock disponible: {stockInicial}</p>
       </div>
 
       {aviso && <p className="text-sm text-brand-red">{aviso}</p>}
@@ -143,7 +129,7 @@ export default function ContarPiezasForm({
         <button
           type="button"
           onClick={quitarUltimaPieza}
-          disabled={busy || piezas === 0}
+          disabled={pending || piezas === 0}
           className="flex-1 rounded-full border border-white/20 px-4 py-2 text-sm text-brand-cream disabled:opacity-40"
         >
           Quitar última pieza
@@ -151,7 +137,7 @@ export default function ContarPiezasForm({
         <button
           type="button"
           onClick={cancelarVenta}
-          disabled={busy}
+          disabled={pending}
           className="flex-1 rounded-full border border-brand-red/60 px-4 py-2 text-sm text-brand-red disabled:opacity-40"
         >
           Cancelar venta
@@ -160,11 +146,11 @@ export default function ContarPiezasForm({
 
       <button
         type="button"
-        onClick={() => setFinalizado(true)}
-        disabled={piezas < MINIMO_VENTA_MAYOREO}
+        onClick={finalizarVenta}
+        disabled={pending || piezas === 0}
         className="rounded-full bg-brand-gold px-6 py-3 font-semibold text-brand-black transition-opacity disabled:opacity-40"
       >
-        Finalizar venta
+        {pending ? "Registrando..." : "Finalizar venta"}
       </button>
     </div>
   );

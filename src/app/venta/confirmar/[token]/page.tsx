@@ -50,7 +50,7 @@ export default async function ConfirmarVentaPage({
       <main className="flex flex-1 flex-col items-center justify-center p-4">
         <ContarPiezasForm
           qrToken={token}
-          ventaId={crypto.randomUUID()}
+          idempotencyKey={crypto.randomUUID()}
           precio={Number(lote.precio_mxn)}
           stockInicial={lote.stock}
         />
