@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
 import Header from "@/components/Header";
-import ConfirmarVentaForm from "./confirmar-venta-form";
+import ContarPiezasForm from "./contar-piezas-form";
 
 interface LoteConStockRow {
   id: number;
@@ -48,11 +48,11 @@ export default async function ConfirmarVentaPage({
     <div className="flex min-h-screen flex-col">
       <Header titulo="Confirmar venta" />
       <main className="flex flex-1 flex-col items-center justify-center p-4">
-        <ConfirmarVentaForm
+        <ContarPiezasForm
           qrToken={token}
-          idempotencyKey={crypto.randomUUID()}
+          ventaId={crypto.randomUUID()}
           precio={Number(lote.precio_mxn)}
-          stock={lote.stock}
+          stockInicial={lote.stock}
         />
       </main>
     </div>

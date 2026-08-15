@@ -3,19 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import QrScanner from "qr-scanner";
-
-function extraerToken(texto: string): string | null {
-  try {
-    const url = new URL(texto);
-    const partes = url.pathname.split("/").filter(Boolean);
-    const idx = partes.indexOf("scan");
-    if (idx !== -1 && partes[idx + 1]) return partes[idx + 1];
-    return partes.at(-1) ?? null;
-  } catch {
-    // No es una URL completa: asumir que el texto ya es el token.
-    return texto.trim() || null;
-  }
-}
+import { extraerToken } from "@/lib/qr-token";
 
 export default function EscanerQr() {
   const videoRef = useRef<HTMLVideoElement>(null);
