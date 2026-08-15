@@ -11,7 +11,10 @@ interface PrecioRow {
   id: number;
   precio_mxn: string;
   activo: boolean;
+  sucursal_id: number;
   sucursal_nombre: string;
+  sucursal_clave: string;
+  sucursal_tipo: string;
 }
 
 interface SucursalRow {
@@ -25,12 +28,28 @@ export default async function AdminPreciosPage() {
 
   const [{ rows: precios }, { rows: sucursales }] = await Promise.all([
     query<PrecioRow>(
-      `SELECT l.id, l.precio_mxn, l.activo, s.nombre AS sucursal_nombre
+      `SELECT l.id, l.precio_mxn, l.activo, s.id AS sucursal_id, s.nombre AS sucursal_nombre,
+              s.clave AS sucursal_clave, s.tipo AS sucursal_tipo
        FROM lotes l JOIN sucursales s ON s.id = l.sucursal_id
-       ORDER BY s.nombre, l.precio_mxn`
+       ORDER BY s.tipo, s.nombre, l.precio_mxn`
     ),
     query<SucursalRow>("SELECT id, nombre FROM sucursales WHERE activa = true ORDER BY nombre"),
   ]);
+
+  const grupos = new Map<
+    number,
+    { nombre: string; clave: string; tipo: string; precios: PrecioRow[] }
+  >();
+  for (const p of precios) {
+    const grupo = grupos.get(p.sucursal_id) ?? {
+      nombre: p.sucursal_nombre,
+      clave: p.sucursal_clave,
+      tipo: p.sucursal_tipo,
+      precios: [],
+    };
+    grupo.precios.push(p);
+    grupos.set(p.sucursal_id, grupo);
+  }
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -39,57 +58,81 @@ export default async function AdminPreciosPage() {
       <main className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
         <NuevoPrecioForm sucursales={sucursales} />
 
-        <div className="overflow-x-auto rounded-2xl border border-white/10">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-brand-gray2 text-brand-cream/70">
-              <tr>
-                <th className="px-4 py-2">Sucursal</th>
-                <th className="px-4 py-2">Precio</th>
-                <th className="px-4 py-2">Estado</th>
-                <th className="px-4 py-2">QR</th>
-                <th className="px-4 py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {precios.map((p) => (
-                <tr key={p.id} className="border-t border-white/10">
-                  <td className="px-4 py-2">{p.sucursal_nombre}</td>
-                  <td className="px-4 py-2">${Number(p.precio_mxn).toFixed(2)}</td>
-                  <td className="px-4 py-2">
-                    {p.activo ? (
-                      <span className="text-brand-green">Activo</span>
-                    ) : (
-                      <span className="text-brand-cream/50">Inactivo</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2">
-                    <Link href={`/admin/precios/${p.id}/qr`} className="text-brand-gold underline">
-                      Ver / imprimir
-                    </Link>
-                  </td>
-                  <td className="px-4 py-2">
-                    <form action={togglePrecioActivoAction}>
-                      <input type="hidden" name="id" value={p.id} />
-                      <input type="hidden" name="activo" value={String(p.activo)} />
-                      <button
-                        type="submit"
-                        className="text-sm text-brand-cream/70 underline hover:text-brand-gold"
-                      >
-                        {p.activo ? "Desactivar" : "Activar"}
-                      </button>
-                    </form>
-                  </td>
-                </tr>
-              ))}
-              {precios.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-brand-cream/50">
-                    Sin precios todavía.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        {grupos.size === 0 && (
+          <p className="rounded-2xl border border-white/10 bg-brand-gray2 p-4 text-center text-sm text-brand-cream/50">
+            Sin precios todavía.
+          </p>
+        )}
+
+        <div className="flex flex-col gap-3">
+          {[...grupos.values()].map((grupo) => (
+            <details
+              key={grupo.clave}
+              className="group rounded-2xl border border-white/10 bg-brand-gray2 open:pb-2"
+            >
+              <summary className="flex cursor-pointer items-center gap-3 px-4 py-3 text-brand-cream">
+                <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-brand-cream/60">
+                  {grupo.clave}
+                </span>
+                <span className="font-semibold">{grupo.nombre}</span>
+                {grupo.tipo === "almacen" && (
+                  <span className="rounded-full bg-brand-gold/20 px-3 py-1 text-xs text-brand-gold">
+                    Almacén
+                  </span>
+                )}
+                <span className="ml-auto text-sm text-brand-cream/50">
+                  {grupo.precios.length} precio{grupo.precios.length !== 1 ? "s" : ""}
+                </span>
+              </summary>
+
+              <div className="overflow-x-auto border-t border-white/10">
+                <table className="w-full text-left text-sm">
+                  <thead className="text-brand-cream/70">
+                    <tr>
+                      <th className="px-4 py-2">Precio</th>
+                      <th className="px-4 py-2">Estado</th>
+                      <th className="px-4 py-2">QR</th>
+                      <th className="px-4 py-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {grupo.precios.map((p) => (
+                      <tr key={p.id} className="border-t border-white/10">
+                        <td className="px-4 py-2">${Number(p.precio_mxn).toFixed(2)}</td>
+                        <td className="px-4 py-2">
+                          {p.activo ? (
+                            <span className="text-brand-green">Activo</span>
+                          ) : (
+                            <span className="text-brand-cream/50">Inactivo</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2">
+                          <Link
+                            href={`/admin/precios/${p.id}/qr`}
+                            className="text-brand-gold underline"
+                          >
+                            Ver / imprimir
+                          </Link>
+                        </td>
+                        <td className="px-4 py-2">
+                          <form action={togglePrecioActivoAction}>
+                            <input type="hidden" name="id" value={p.id} />
+                            <input type="hidden" name="activo" value={String(p.activo)} />
+                            <button
+                              type="submit"
+                              className="text-sm text-brand-cream/70 underline hover:text-brand-gold"
+                            >
+                              {p.activo ? "Desactivar" : "Activar"}
+                            </button>
+                          </form>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          ))}
         </div>
       </main>
     </div>
