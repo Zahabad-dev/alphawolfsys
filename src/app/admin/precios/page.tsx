@@ -7,6 +7,7 @@ import AdminNav from "@/components/AdminNav";
 import NuevoPrecioForm from "./nuevo-precio-form";
 import AsignarPrecioForm from "./asignar-precio-form";
 import EditarPrecioForm from "./editar-precio-form";
+import EliminarPrecioForm from "./eliminar-precio-form";
 import { togglePrecioActivoAction } from "./actions";
 
 interface PrecioRow {
@@ -109,6 +110,7 @@ export default async function AdminPreciosPage() {
                       <th className="px-4 py-2">Estado</th>
                       <th className="px-4 py-2">QR</th>
                       <th className="px-4 py-2"></th>
+                      <th className="px-4 py-2"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -143,6 +145,9 @@ export default async function AdminPreciosPage() {
                               {p.activo ? "Desactivar" : "Activar"}
                             </button>
                           </form>
+                        </td>
+                        <td className="px-4 py-2">
+                          <EliminarPrecioForm id={p.id} />
                         </td>
                       </tr>
                     ))}

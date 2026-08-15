@@ -1,5 +1,6 @@
 "use server";
 
+import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
@@ -139,4 +140,58 @@ export async function togglePrecioActivoAction(formData: FormData) {
 
   await query("UPDATE lotes SET activo = $1 WHERE id = $2", [!activo, id]);
   revalidatePath("/admin/precios");
+}
+
+export interface EliminarPrecioResult {
+  error?: string;
+  success?: string;
+}
+
+/**
+ * Borra un precio por completo. Bloquea si ya tiene movimientos registrados
+ * (ventas, entradas, traspasos) para no perder ese historial — en ese caso
+ * hay que Desactivarlo en vez de eliminarlo.
+ */
+export async function eliminarPrecioAction(
+  _prevState: EliminarPrecioResult | undefined,
+  formData: FormData
+): Promise<EliminarPrecioResult> {
+  const session = await auth();
+  if (!session || session.user.rol !== "admin") {
+    return { error: "No autorizado." };
+  }
+
+  const id = Number(formData.get("id"));
+  const password = formData.get("password");
+
+  if (!id) return { error: "Precio inválido." };
+  if (typeof password !== "string" || !password) {
+    return { error: "Escribe tu contraseña para confirmar." };
+  }
+
+  const { rows: adminRows } = await query<{ password_hash: string }>(
+    "SELECT password_hash FROM usuarios WHERE id = $1",
+    [Number(session.user.id)]
+  );
+  const passwordValida = adminRows[0]
+    ? await bcrypt.compare(password, adminRows[0].password_hash)
+    : false;
+  if (!passwordValida) {
+    return { error: "Contraseña incorrecta." };
+  }
+
+  const { rows: movRows } = await query<{ total: string }>(
+    "SELECT COUNT(*) AS total FROM movimientos_inventario WHERE lote_id = $1",
+    [id]
+  );
+  if (Number(movRows[0]?.total ?? 0) > 0) {
+    return {
+      error: "Este precio ya tiene ventas/movimientos registrados — no se puede eliminar sin perder ese historial. Usa Desactivar en su lugar.",
+    };
+  }
+
+  await query("DELETE FROM lotes WHERE id = $1", [id]);
+
+  revalidatePath("/admin/precios");
+  return { success: "Precio eliminado." };
 }
