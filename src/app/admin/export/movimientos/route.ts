@@ -3,7 +3,14 @@ import { auth } from "@/auth";
 import { query } from "@/lib/db";
 import { toCsv, csvResponse } from "@/lib/csv";
 
-const TIPOS = ["entrada", "venta", "ajuste"] as const;
+const TIPOS = [
+  "entrada",
+  "venta",
+  "ajuste",
+  "corte",
+  "traspaso_salida",
+  "traspaso_entrada",
+] as const;
 
 interface MovimientoRow {
   creado_en: string;

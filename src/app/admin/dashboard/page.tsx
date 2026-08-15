@@ -12,6 +12,8 @@ interface ResumenRow {
   total_semana: string;
   piezas_mes: number;
   total_mes: string;
+  piezas_cortadas_mes: number;
+  piezas_traspasadas_mes: number;
 }
 
 interface PorSucursalRow {
@@ -50,7 +52,11 @@ export default async function AdminDashboardPage() {
            COALESCE(SUM(CASE WHEN creado_en >= date_trunc('week', now()) THEN -cantidad ELSE 0 END),0)::int AS piezas_semana,
            COALESCE(SUM(CASE WHEN creado_en >= date_trunc('week', now()) THEN -cantidad*precio_unitario_mxn ELSE 0 END),0) AS total_semana,
            COALESCE(SUM(CASE WHEN creado_en >= date_trunc('month', now()) THEN -cantidad ELSE 0 END),0)::int AS piezas_mes,
-           COALESCE(SUM(CASE WHEN creado_en >= date_trunc('month', now()) THEN -cantidad*precio_unitario_mxn ELSE 0 END),0) AS total_mes
+           COALESCE(SUM(CASE WHEN creado_en >= date_trunc('month', now()) THEN -cantidad*precio_unitario_mxn ELSE 0 END),0) AS total_mes,
+           (SELECT COALESCE(SUM(cantidad),0)::int FROM movimientos_inventario
+             WHERE tipo = 'corte' AND creado_en >= date_trunc('month', now())) AS piezas_cortadas_mes,
+           (SELECT COALESCE(SUM(cantidad),0)::int FROM movimientos_inventario
+             WHERE tipo = 'traspaso_entrada' AND creado_en >= date_trunc('month', now())) AS piezas_traspasadas_mes
          FROM movimientos_inventario
          WHERE tipo = 'venta'`
       ),
@@ -61,6 +67,7 @@ export default async function AdminDashboardPage() {
          FROM sucursales s
          LEFT JOIN movimientos_inventario m
            ON m.sucursal_id = s.id AND m.tipo = 'venta' AND m.creado_en >= date_trunc('month', now())
+         WHERE s.tipo = 'sucursal'
          GROUP BY s.id, s.nombre
          ORDER BY s.nombre`
       ),
@@ -97,6 +104,17 @@ export default async function AdminDashboardPage() {
           <StatCard titulo="Hoy" piezas={resumen.piezas_hoy} total={resumen.total_hoy} />
           <StatCard titulo="Esta semana" piezas={resumen.piezas_semana} total={resumen.total_semana} />
           <StatCard titulo="Este mes" piezas={resumen.piezas_mes} total={resumen.total_mes} />
+        </section>
+
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="rounded-2xl border border-white/10 bg-brand-gray2 p-4">
+            <p className="text-sm text-brand-cream/70">Piezas cortadas (este mes)</p>
+            <p className="text-2xl font-bold text-brand-gold">{resumen.piezas_cortadas_mes} pzs</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-brand-gray2 p-4">
+            <p className="text-sm text-brand-cream/70">Piezas traspasadas a sucursales (este mes)</p>
+            <p className="text-2xl font-bold text-brand-gold">{resumen.piezas_traspasadas_mes} pzs</p>
+          </div>
         </section>
 
         {stockBajo.length > 0 && (

@@ -1,0 +1,101 @@
+"use server";
+
+import crypto from "crypto";
+import { revalidatePath } from "next/cache";
+import { auth } from "@/auth";
+import { query, withTransaction } from "@/lib/db";
+
+export interface RegistrarTraspasoResult {
+  error?: string;
+  success?: string;
+}
+
+export async function registrarTraspasoAction(
+  _prevState: RegistrarTraspasoResult | undefined,
+  formData: FormData
+): Promise<RegistrarTraspasoResult> {
+  const session = await auth();
+  if (!session || session.user.rol !== "admin") {
+    return { error: "No autorizado." };
+  }
+
+  const loteOrigenId = Number(formData.get("lote_origen_id"));
+  const sucursalDestinoId = Number(formData.get("sucursal_destino_id"));
+  const cantidad = Number(formData.get("cantidad"));
+  const nota = formData.get("nota");
+
+  if (!loteOrigenId) return { error: "Selecciona el lote de origen (Almacén)." };
+  if (!sucursalDestinoId) return { error: "Selecciona la sucursal destino." };
+  if (!Number.isInteger(cantidad) || cantidad <= 0) {
+    return { error: "La cantidad debe ser un número entero mayor a 0." };
+  }
+
+  const { rows: origenRows } = await query<{
+    precio_mxn: string;
+    sucursal_id: number;
+    tipo: string;
+  }>(
+    `SELECT l.precio_mxn, l.sucursal_id, s.tipo
+     FROM lotes l JOIN sucursales s ON s.id = l.sucursal_id
+     WHERE l.id = $1`,
+    [loteOrigenId]
+  );
+  const origen = origenRows[0];
+  if (!origen) return { error: "Lote de origen no encontrado." };
+  if (origen.tipo !== "almacen") return { error: "El origen debe ser un lote del Almacén Central." };
+
+  const { rows: destinoLoteRows } = await query<{ id: number }>(
+    `SELECT l.id FROM lotes l JOIN sucursales s ON s.id = l.sucursal_id
+     WHERE l.sucursal_id = $1 AND l.precio_mxn = $2 AND s.tipo = 'sucursal'`,
+    [sucursalDestinoId, origen.precio_mxn]
+  );
+  const destinoLote = destinoLoteRows[0];
+  if (!destinoLote) {
+    return {
+      error: `Esa sucursal no tiene un lote de $${origen.precio_mxn} — créalo primero en Lotes.`,
+    };
+  }
+
+  const traspasoId = crypto.randomUUID();
+
+  try {
+    await withTransaction(async (client) => {
+      const { rows: stockRows } = await client.query<{ stock: string }>(
+        "SELECT stock FROM stock_actual WHERE lote_id = $1",
+        [loteOrigenId]
+      );
+      const stock = Number(stockRows[0]?.stock ?? 0);
+      if (cantidad > stock) {
+        throw new Error(`STOCK_INSUFICIENTE:${stock}`);
+      }
+
+      const notaFinal = typeof nota === "string" && nota ? nota : null;
+
+      await client.query(
+        `INSERT INTO movimientos_inventario
+           (lote_id, sucursal_id, tipo, cantidad, usuario_id, nota, traspaso_id)
+         VALUES ($1, $2, 'traspaso_salida', $3, $4, $5, $6)`,
+        [loteOrigenId, origen.sucursal_id, -cantidad, Number(session.user.id), notaFinal, traspasoId]
+      );
+
+      await client.query(
+        `INSERT INTO movimientos_inventario
+           (lote_id, sucursal_id, tipo, cantidad, usuario_id, nota, traspaso_id)
+         VALUES ($1, $2, 'traspaso_entrada', $3, $4, $5, $6)`,
+        [destinoLote.id, sucursalDestinoId, cantidad, Number(session.user.id), notaFinal, traspasoId]
+      );
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "";
+    if (msg.startsWith("STOCK_INSUFICIENTE")) {
+      const stockDisponible = msg.split(":")[1];
+      return { error: `Stock insuficiente en Almacén: quedan ${stockDisponible} piezas.` };
+    }
+    throw err;
+  }
+
+  revalidatePath("/admin/traspasos");
+  revalidatePath("/admin/inventario");
+  revalidatePath("/admin/corte");
+  return { success: `Traspaso registrado: ${cantidad} piezas.` };
+}

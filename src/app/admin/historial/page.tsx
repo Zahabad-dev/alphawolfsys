@@ -21,7 +21,14 @@ interface MovimientoRow {
   nota: string | null;
 }
 
-const TIPOS = ["entrada", "venta", "ajuste"] as const;
+const TIPOS = [
+  "entrada",
+  "venta",
+  "ajuste",
+  "corte",
+  "traspaso_salida",
+  "traspaso_entrada",
+] as const;
 
 export default async function AdminHistorialPage({
   searchParams,
