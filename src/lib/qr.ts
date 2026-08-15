@@ -16,6 +16,14 @@ export interface QrGenerado {
   size: number;
 }
 
+// DPI usado para rasterizar el QR — el tamaño físico real al imprimir lo controla
+// el CSS en cm, esto solo define qué tan nítido se ve el PNG a ese tamaño.
+const DPI_IMPRESION = 300;
+
+export function cmAPx(cm: number): number {
+  return Math.round((cm / 2.54) * DPI_IMPRESION);
+}
+
 async function generarContornoDegradado(outerSize: number, radio: number): Promise<Buffer> {
   const svg = `
     <svg width="${outerSize}" height="${outerSize}" xmlns="http://www.w3.org/2000/svg">
