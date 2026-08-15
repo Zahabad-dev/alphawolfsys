@@ -4,11 +4,11 @@ import { useActionState } from "react";
 import { registrarTraspasoAction, type RegistrarTraspasoResult } from "./actions";
 
 export default function TraspasoForm({
-  lotesAlmacen,
-  sucursales,
+  origenes,
+  destinos,
 }: {
-  lotesAlmacen: { id: number; etiqueta: string; stock: number }[];
-  sucursales: { id: number; nombre: string }[];
+  origenes: { id: number; etiqueta: string; stock: number }[];
+  destinos: { id: number; nombre: string }[];
 }) {
   const [state, formAction, pending] = useActionState<RegistrarTraspasoResult | undefined, FormData>(
     registrarTraspasoAction,
@@ -21,14 +21,14 @@ export default function TraspasoForm({
       className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-brand-gray2 p-4 sm:flex-row sm:flex-wrap sm:items-end"
     >
       <label className="flex flex-1 flex-col gap-1 text-sm text-brand-cream/80">
-        Lote origen (Almacén)
+        Origen (de dónde salen)
         <select
           name="lote_origen_id"
           required
           className="rounded-lg border border-white/10 bg-brand-black px-3 py-2 text-brand-cream outline-none focus:border-brand-gold"
         >
           <option value="">Selecciona...</option>
-          {lotesAlmacen.map((l) => (
+          {origenes.map((l) => (
             <option key={l.id} value={l.id}>
               {l.etiqueta} — stock: {l.stock}
             </option>
@@ -37,14 +37,14 @@ export default function TraspasoForm({
       </label>
 
       <label className="flex flex-1 flex-col gap-1 text-sm text-brand-cream/80">
-        Sucursal destino
+        Destino (a dónde llegan)
         <select
           name="sucursal_destino_id"
           required
           className="rounded-lg border border-white/10 bg-brand-black px-3 py-2 text-brand-cream outline-none focus:border-brand-gold"
         >
           <option value="">Selecciona...</option>
-          {sucursales.map((s) => (
+          {destinos.map((s) => (
             <option key={s.id} value={s.id}>
               {s.nombre}
             </option>

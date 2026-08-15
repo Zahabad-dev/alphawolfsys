@@ -19,7 +19,7 @@ export default function EntradaForm({
       className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-brand-gray2 p-4 sm:flex-row sm:items-end"
     >
       <label className="flex flex-1 flex-col gap-1 text-sm text-brand-cream/80">
-        Lote
+        Precio
         <select
           name="lote_id"
           required

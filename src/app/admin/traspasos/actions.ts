@@ -24,35 +24,30 @@ export async function registrarTraspasoAction(
   const cantidad = Number(formData.get("cantidad"));
   const nota = formData.get("nota");
 
-  if (!loteOrigenId) return { error: "Selecciona el lote de origen (Almacén)." };
-  if (!sucursalDestinoId) return { error: "Selecciona la sucursal destino." };
+  if (!loteOrigenId) return { error: "Selecciona el origen." };
+  if (!sucursalDestinoId) return { error: "Selecciona el destino." };
   if (!Number.isInteger(cantidad) || cantidad <= 0) {
     return { error: "La cantidad debe ser un número entero mayor a 0." };
   }
 
-  const { rows: origenRows } = await query<{
-    precio_mxn: string;
-    sucursal_id: number;
-    tipo: string;
-  }>(
-    `SELECT l.precio_mxn, l.sucursal_id, s.tipo
-     FROM lotes l JOIN sucursales s ON s.id = l.sucursal_id
-     WHERE l.id = $1`,
+  const { rows: origenRows } = await query<{ precio_mxn: string; sucursal_id: number }>(
+    "SELECT precio_mxn, sucursal_id FROM lotes WHERE id = $1",
     [loteOrigenId]
   );
   const origen = origenRows[0];
-  if (!origen) return { error: "Lote de origen no encontrado." };
-  if (origen.tipo !== "almacen") return { error: "El origen debe ser un lote del Almacén Central." };
+  if (!origen) return { error: "Precio de origen no encontrado." };
+  if (origen.sucursal_id === sucursalDestinoId) {
+    return { error: "El origen y el destino no pueden ser la misma sucursal." };
+  }
 
   const { rows: destinoLoteRows } = await query<{ id: number }>(
-    `SELECT l.id FROM lotes l JOIN sucursales s ON s.id = l.sucursal_id
-     WHERE l.sucursal_id = $1 AND l.precio_mxn = $2 AND s.tipo = 'sucursal'`,
+    "SELECT id FROM lotes WHERE sucursal_id = $1 AND precio_mxn = $2",
     [sucursalDestinoId, origen.precio_mxn]
   );
   const destinoLote = destinoLoteRows[0];
   if (!destinoLote) {
     return {
-      error: `Esa sucursal no tiene un lote de $${origen.precio_mxn} — créalo primero en Lotes.`,
+      error: `El destino no tiene un precio de $${origen.precio_mxn} — créalo primero en Precios.`,
     };
   }
 
@@ -89,7 +84,7 @@ export async function registrarTraspasoAction(
     const msg = err instanceof Error ? err.message : "";
     if (msg.startsWith("STOCK_INSUFICIENTE")) {
       const stockDisponible = msg.split(":")[1];
-      return { error: `Stock insuficiente en Almacén: quedan ${stockDisponible} piezas.` };
+      return { error: `Stock insuficiente en el origen: quedan ${stockDisponible} piezas.` };
     }
     throw err;
   }

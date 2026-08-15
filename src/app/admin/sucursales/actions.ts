@@ -43,6 +43,48 @@ export async function actualizarSucursalAction(
   return { success: "Sucursal actualizada." };
 }
 
+export interface CrearSucursalResult {
+  error?: string;
+  success?: string;
+}
+
+export async function crearSucursalAction(
+  _prevState: CrearSucursalResult | undefined,
+  formData: FormData
+): Promise<CrearSucursalResult> {
+  await requireAdmin();
+
+  const clave = formData.get("clave");
+  const nombre = formData.get("nombre");
+  const estado = formData.get("estado");
+
+  if (typeof clave !== "string" || !clave.trim()) {
+    return { error: "La clave es obligatoria (ej. MOR)." };
+  }
+  if (typeof nombre !== "string" || !nombre.trim()) {
+    return { error: "El nombre es obligatorio." };
+  }
+  if (typeof estado !== "string" || !estado.trim()) {
+    return { error: "El estado es obligatorio." };
+  }
+
+  try {
+    await query(
+      "INSERT INTO sucursales (clave, nombre, estado, tipo) VALUES ($1, $2, $3, 'sucursal')",
+      [clave.trim().toUpperCase(), nombre.trim(), estado.trim()]
+    );
+  } catch (err) {
+    const pgError = err as { code?: string };
+    if (pgError.code === "23505") {
+      return { error: "Ya existe una sucursal con esa clave." };
+    }
+    throw err;
+  }
+
+  revalidatePath("/admin/sucursales");
+  return { success: `Sucursal "${nombre}" creada.` };
+}
+
 export async function toggleSucursalActivaAction(formData: FormData) {
   await requireAdmin();
 

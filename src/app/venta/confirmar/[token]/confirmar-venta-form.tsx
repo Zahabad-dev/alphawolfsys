@@ -3,17 +3,16 @@
 import { useActionState, useMemo, useState } from "react";
 import Link from "next/link";
 import { registrarVentaAction, type RegistrarVentaResult } from "@/app/venta/actions";
+import { MINIMO_VENTA_MAYOREO } from "@/lib/constants";
 
 export default function ConfirmarVentaForm({
   qrToken,
   idempotencyKey,
-  nombre,
   precio,
   stock,
 }: {
   qrToken: string;
   idempotencyKey: string;
-  nombre: string;
   precio: number;
   stock: number;
 }) {
@@ -54,16 +53,15 @@ export default function ConfirmarVentaForm({
       <input type="hidden" name="qr_token" value={qrToken} />
       <input type="hidden" name="idempotency_key" value={idempotencyKey} />
 
-      <p className="text-lg font-semibold text-brand-gold">{nombre}</p>
-      <p className="text-brand-cream/80">Precio: ${precio.toFixed(2)} MXN</p>
+      <p className="text-2xl font-semibold text-brand-gold">${precio.toFixed(2)} MXN</p>
       <p className="text-brand-cream/80">Stock disponible: {stock}</p>
 
       <label className="flex flex-col gap-1 text-sm text-brand-cream/80">
-        Cantidad de piezas
+        Cantidad de piezas (mínimo {MINIMO_VENTA_MAYOREO})
         <input
           name="cantidad"
           type="number"
-          min="1"
+          min={MINIMO_VENTA_MAYOREO}
           step="1"
           required
           value={cantidad}

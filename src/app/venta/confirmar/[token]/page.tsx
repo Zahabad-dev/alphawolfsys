@@ -37,11 +37,11 @@ export default async function ConfirmarVentaPage({
   const lote = rows[0];
 
   if (!lote || !lote.activo) {
-    return <MensajeSimple titulo="Lote no encontrado o inactivo." />;
+    return <MensajeSimple titulo="Precio no encontrado o inactivo." />;
   }
 
   if (lote.sucursal_id !== user.sucursalId) {
-    return <MensajeSimple titulo="Este lote pertenece a otra sucursal." />;
+    return <MensajeSimple titulo="Este precio pertenece a otra sucursal." />;
   }
 
   return (
@@ -51,7 +51,6 @@ export default async function ConfirmarVentaPage({
         <ConfirmarVentaForm
           qrToken={token}
           idempotencyKey={crypto.randomUUID()}
-          nombre={lote.nombre}
           precio={Number(lote.precio_mxn)}
           stock={lote.stock}
         />

@@ -155,7 +155,7 @@ export default async function AdminDashboardPage() {
         </section>
 
         <section>
-          <p className="mb-3 text-sm text-brand-cream/70">Top 5 lotes vendidos (este mes)</p>
+          <p className="mb-3 text-sm text-brand-cream/70">Top 5 precios vendidos (este mes)</p>
           <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-brand-gray2 p-4">
             {topLotes.length === 0 && (
               <p className="text-sm text-brand-cream/50">Sin ventas este mes todavía.</p>

@@ -163,7 +163,7 @@ export default async function AdminHistorialPage({
               <tr>
                 <th className="px-4 py-2">Fecha</th>
                 <th className="px-4 py-2">Sucursal</th>
-                <th className="px-4 py-2">Lote</th>
+                <th className="px-4 py-2">Precio</th>
                 <th className="px-4 py-2">Tipo</th>
                 <th className="px-4 py-2">Cantidad</th>
                 <th className="px-4 py-2">Usuario</th>
@@ -173,7 +173,7 @@ export default async function AdminHistorialPage({
             <tbody>
               {movimientos.map((m) => (
                 <tr key={m.id} className="border-t border-white/10">
-                  <td className="px-4 py-2 whitespace-nowrap">
+                  <td className="px-4 py-2 whitespace-nowrap font-semibold text-brand-gold">
                     {new Date(m.creado_en).toLocaleString("es-MX")}
                   </td>
                   <td className="px-4 py-2">{m.sucursal_nombre}</td>

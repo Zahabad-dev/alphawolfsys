@@ -2,6 +2,7 @@
 
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
+import { MINIMO_VENTA_MAYOREO } from "@/lib/constants";
 
 interface LoteRow {
   id: number;
@@ -42,6 +43,9 @@ export async function registrarVentaAction(
   if (!Number.isInteger(cantidad) || cantidad <= 0) {
     return { error: "La cantidad debe ser un número entero mayor a 0." };
   }
+  if (cantidad < MINIMO_VENTA_MAYOREO) {
+    return { error: `El mínimo de venta al mayoreo es ${MINIMO_VENTA_MAYOREO} piezas.` };
+  }
 
   const { rows: loteRows } = await query<LoteRow>(
     "SELECT id, nombre, precio_mxn, sucursal_id, activo FROM lotes WHERE qr_token = $1",
@@ -49,10 +53,10 @@ export async function registrarVentaAction(
   );
   const lote = loteRows[0];
   if (!lote || !lote.activo) {
-    return { error: "Lote no encontrado o inactivo." };
+    return { error: "Precio no encontrado o inactivo." };
   }
   if (lote.sucursal_id !== user.sucursalId) {
-    return { error: "Este lote pertenece a otra sucursal." };
+    return { error: "Este precio pertenece a otra sucursal." };
   }
 
   const { rows: stockRows } = await query<StockRow>(

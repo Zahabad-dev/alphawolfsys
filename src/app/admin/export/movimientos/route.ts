@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
   );
 
   const csv = toCsv(
-    ["Fecha", "Sucursal", "Lote", "Tipo", "Cantidad", "Precio unitario", "Usuario", "Nota"],
+    ["Fecha", "Sucursal", "Precio", "Tipo", "Cantidad", "Precio unitario", "Usuario", "Nota"],
     rows.map((r) => [
       new Date(r.creado_en).toLocaleString("es-MX"),
       r.sucursal_nombre,

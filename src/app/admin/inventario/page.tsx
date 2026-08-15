@@ -27,7 +27,7 @@ export default async function AdminInventarioPage() {
 
   const lotesParaForm = stock.map((s) => ({
     id: s.lote_id,
-    etiqueta: `${s.sucursal_nombre} — ${s.nombre}`,
+    etiqueta: `${s.sucursal_nombre} — $${Number(s.precio_mxn).toFixed(2)}`,
   }));
 
   return (
@@ -50,7 +50,6 @@ export default async function AdminInventarioPage() {
             <thead className="bg-brand-gray2 text-brand-cream/70">
               <tr>
                 <th className="px-4 py-2">Sucursal</th>
-                <th className="px-4 py-2">Lote</th>
                 <th className="px-4 py-2">Precio</th>
                 <th className="px-4 py-2">Stock</th>
               </tr>
@@ -59,7 +58,6 @@ export default async function AdminInventarioPage() {
               {stock.map((s) => (
                 <tr key={s.lote_id} className="border-t border-white/10">
                   <td className="px-4 py-2">{s.sucursal_nombre}</td>
-                  <td className="px-4 py-2">{s.nombre}</td>
                   <td className="px-4 py-2">${Number(s.precio_mxn).toFixed(2)}</td>
                   <td
                     className={`px-4 py-2 ${

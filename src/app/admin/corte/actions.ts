@@ -22,7 +22,7 @@ export async function registrarCorteAction(
   const cantidad = Number(formData.get("cantidad"));
   const nota = formData.get("nota");
 
-  if (!loteId) return { error: "Selecciona un lote del almacén." };
+  if (!loteId) return { error: "Selecciona un precio del almacén." };
   if (!Number.isInteger(cantidad) || cantidad <= 0) {
     return { error: "La cantidad debe ser un número entero mayor a 0." };
   }
@@ -34,8 +34,8 @@ export async function registrarCorteAction(
     [loteId]
   );
   const lote = rows[0];
-  if (!lote) return { error: "Lote no encontrado." };
-  if (lote.tipo !== "almacen") return { error: "Ese lote no pertenece al Almacén Central." };
+  if (!lote) return { error: "Precio no encontrado." };
+  if (lote.tipo !== "almacen") return { error: "Ese precio no pertenece al Almacén Central." };
 
   await query(
     `INSERT INTO movimientos_inventario (lote_id, sucursal_id, tipo, cantidad, usuario_id, nota)
