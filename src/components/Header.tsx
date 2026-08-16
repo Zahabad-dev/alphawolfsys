@@ -18,12 +18,6 @@ export default function Header({
           height={36}
           className="h-9 w-auto object-contain"
         />
-        <div>
-          <p className="text-lg font-semibold text-brand-gold">{titulo}</p>
-          {subtitulo && <p className="text-sm text-brand-cream/70">{subtitulo}</p>}
-        </div>
-      </div>
-      <div className="flex items-center gap-3">
         <Image
           src="/brand/maktub-logo.png"
           alt="Maktub"
@@ -31,15 +25,19 @@ export default function Header({
           height={36}
           className="h-9 w-auto object-contain"
         />
-        <form action={logoutAction}>
-          <button
-            type="submit"
-            className="rounded-full border border-white/10 px-4 py-1.5 text-sm text-brand-cream/80 hover:border-brand-gold hover:text-brand-gold"
-          >
-            Salir
-          </button>
-        </form>
+        <div>
+          <p className="text-lg font-semibold text-brand-gold">{titulo}</p>
+          {subtitulo && <p className="text-sm text-brand-cream/70">{subtitulo}</p>}
+        </div>
       </div>
+      <form action={logoutAction}>
+        <button
+          type="submit"
+          className="rounded-full border border-white/10 px-4 py-1.5 text-sm text-brand-cream/80 hover:border-brand-gold hover:text-brand-gold"
+        >
+          Salir
+        </button>
+      </form>
     </header>
   );
 }
