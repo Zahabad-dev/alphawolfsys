@@ -23,14 +23,23 @@ export default function Header({
           {subtitulo && <p className="text-sm text-brand-cream/70">{subtitulo}</p>}
         </div>
       </div>
-      <form action={logoutAction}>
-        <button
-          type="submit"
-          className="rounded-full border border-white/10 px-4 py-1.5 text-sm text-brand-cream/80 hover:border-brand-gold hover:text-brand-gold"
-        >
-          Salir
-        </button>
-      </form>
+      <div className="flex items-center gap-3">
+        <Image
+          src="/brand/maktub-logo.png"
+          alt="Maktub"
+          width={36}
+          height={36}
+          className="h-9 w-auto object-contain"
+        />
+        <form action={logoutAction}>
+          <button
+            type="submit"
+            className="rounded-full border border-white/10 px-4 py-1.5 text-sm text-brand-cream/80 hover:border-brand-gold hover:text-brand-gold"
+          >
+            Salir
+          </button>
+        </form>
+      </div>
     </header>
   );
 }

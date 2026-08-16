@@ -10,14 +10,24 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-brand-black px-6">
-      <Image
-        src="/brand/wolf-logo.png"
-        alt="Wolf Daniel's"
-        width={80}
-        height={80}
-        className="h-20 w-auto object-contain"
-        priority
-      />
+      <div className="flex items-center gap-4">
+        <Image
+          src="/brand/wolf-logo.png"
+          alt="Wolf Daniel's"
+          width={80}
+          height={80}
+          className="h-20 w-auto object-contain"
+          priority
+        />
+        <Image
+          src="/brand/maktub-logo.png"
+          alt="Maktub"
+          width={80}
+          height={80}
+          className="h-20 w-auto object-contain"
+          priority
+        />
+      </div>
       <h1 className="text-center text-2xl text-brand-gold">Wolf Daniels</h1>
 
       <form
