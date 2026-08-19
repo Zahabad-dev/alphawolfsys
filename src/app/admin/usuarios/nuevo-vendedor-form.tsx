@@ -12,7 +12,7 @@ export default function NuevoVendedorForm({
     crearVendedorAction,
     undefined
   );
-  const [rol, setRol] = useState<"vendedor" | "gerente">("vendedor");
+  const [rol, setRol] = useState<"vendedor" | "gerente" | "soporte">("vendedor");
 
   return (
     <form
@@ -24,11 +24,12 @@ export default function NuevoVendedorForm({
         <select
           name="rol"
           value={rol}
-          onChange={(e) => setRol(e.target.value as "vendedor" | "gerente")}
+          onChange={(e) => setRol(e.target.value as "vendedor" | "gerente" | "soporte")}
           className="rounded-lg border border-white/10 bg-brand-black px-3 py-2 text-brand-cream outline-none focus:border-brand-gold"
         >
           <option value="vendedor">Vendedor (una sucursal)</option>
           <option value="gerente">Gerente (todas, sin borrar nada)</option>
+          <option value="soporte">Soporte (solo bandeja de errores)</option>
         </select>
       </label>
 
@@ -87,7 +88,13 @@ export default function NuevoVendedorForm({
         disabled={pending}
         className="rounded-full bg-brand-gold px-6 py-2 font-semibold text-brand-black transition-opacity disabled:opacity-60"
       >
-        {pending ? "Creando..." : rol === "gerente" ? "Crear gerente" : "Crear vendedor"}
+        {pending
+          ? "Creando..."
+          : rol === "gerente"
+            ? "Crear gerente"
+            : rol === "soporte"
+              ? "Crear usuario de soporte"
+              : "Crear vendedor"}
       </button>
 
       {state?.error && <p className="w-full text-sm text-brand-red">{state.error}</p>}

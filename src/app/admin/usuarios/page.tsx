@@ -7,12 +7,13 @@ import NuevoVendedorForm from "./nuevo-vendedor-form";
 import SucursalSelect from "./sucursal-select";
 import EliminarVendedorForm from "./eliminar-vendedor-form";
 import { toggleUsuarioActivoAction } from "./actions";
+import type { Rol } from "@/types/next-auth";
 
 interface UsuarioRow {
   id: number;
   username: string;
   nombre: string;
-  rol: "admin" | "vendedor";
+  rol: Rol;
   sucursal_id: number | null;
   sucursal_nombre: string | null;
   activo: boolean;

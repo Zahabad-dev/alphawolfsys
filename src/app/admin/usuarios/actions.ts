@@ -35,7 +35,8 @@ export async function crearVendedorAction(
   const username = formData.get("username");
   const nombre = formData.get("nombre");
   const password = formData.get("password");
-  const rol = formData.get("rol") === "gerente" ? "gerente" : "vendedor";
+  const rolRaw = formData.get("rol");
+  const rol = rolRaw === "gerente" || rolRaw === "soporte" ? rolRaw : "vendedor";
   const sucursalId = rol === "vendedor" ? Number(formData.get("sucursal_id")) : null;
 
   if (typeof username !== "string" || !username.trim()) {
@@ -67,8 +68,9 @@ export async function crearVendedorAction(
     throw err;
   }
 
+  const etiquetaRol = rol === "gerente" ? "Gerente" : rol === "soporte" ? "Usuario de soporte" : "Vendedor";
   revalidatePath("/admin/usuarios");
-  return { success: `${rol === "gerente" ? "Gerente" : "Vendedor"} "${nombre}" creado.` };
+  return { success: `${etiquetaRol} "${nombre}" creado.` };
 }
 
 export async function toggleUsuarioActivoAction(formData: FormData) {

@@ -10,6 +10,7 @@ const links = [
   { href: "/admin/sucursales", label: "Sucursales" },
   { href: "/admin/historial", label: "Historial" },
   { href: "/admin/ranking", label: "Ranking" },
+  { href: "/soporte", label: "Soporte" },
 ];
 
 export default function AdminNav() {
