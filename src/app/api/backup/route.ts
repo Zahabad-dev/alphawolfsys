@@ -8,19 +8,49 @@ function runPgDump(): Promise<Buffer> {
     const dump = spawn("pg_dump", [process.env.DATABASE_URL!, "--no-owner", "--no-privileges"]);
     const gzip = zlib.createGzip();
     const chunks: Buffer[] = [];
+    let stderr = "";
+    let gzipDone = false;
+    let closeCode: number | null = null;
+    let settled = false;
+
+    // El stdout de pg_dump se cierra igual cuando el proceso truena a medias,
+    // así que "gzip terminó" por sí solo no basta — hay que esperar también
+    // al código de salida real antes de decidir si fue éxito o error.
+    function tryFinish() {
+      if (settled || !gzipDone || closeCode === null) return;
+      settled = true;
+      if (closeCode !== 0) {
+        reject(new Error(`pg_dump salió con código ${closeCode}: ${stderr}`));
+      } else {
+        resolve(Buffer.concat(chunks));
+      }
+    }
 
     dump.stdout.pipe(gzip);
     gzip.on("data", (chunk: Buffer) => chunks.push(chunk));
-    gzip.on("end", () => resolve(Buffer.concat(chunks)));
-    gzip.on("error", reject);
+    gzip.on("end", () => {
+      gzipDone = true;
+      tryFinish();
+    });
+    gzip.on("error", (err) => {
+      if (!settled) {
+        settled = true;
+        reject(err);
+      }
+    });
 
-    let stderr = "";
     dump.stderr.on("data", (d) => {
       stderr += d.toString();
     });
-    dump.on("error", reject);
+    dump.on("error", (err) => {
+      if (!settled) {
+        settled = true;
+        reject(err);
+      }
+    });
     dump.on("close", (code) => {
-      if (code !== 0) reject(new Error(`pg_dump salió con código ${code}: ${stderr}`));
+      closeCode = code;
+      tryFinish();
     });
   });
 }
@@ -33,6 +63,13 @@ export async function POST(request: Request) {
 
   try {
     const buffer = await runPgDump();
+    if (buffer.length < 200) {
+      return NextResponse.json(
+        { error: `pg_dump produjo un archivo sospechosamente vacío (${buffer.length} bytes).` },
+        { status: 500 }
+      );
+    }
+
     const fecha = new Date().toISOString().slice(0, 10);
     const nombre = `wolfsys-${fecha}.sql.gz`;
 
