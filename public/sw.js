@@ -1,7 +1,7 @@
-// Service worker mínimo: instalabilidad + carga rápida de estáticos.
-// Las ventas siempre requieren conexión en vivo (sin cola/sync offline a propósito,
-// para no reintroducir el riesgo de doble registro que el diseño del ledger evita).
-const CACHE_NAME = "wd-inventario-v1";
+// Las ventas ahora sí soportan cola offline (ver src/lib/offline-db.ts) — el
+// vendedor cuenta y guarda local si no hay señal, se sincroniza sola después.
+// Aquí solo nos aseguramos de que la app misma (el "shell") cargue sin señal.
+const CACHE_NAME = "wd-inventario-v2";
 const ESTATICOS_PREFIX = ["/_next/static/", "/icons/"];
 
 self.addEventListener("install", () => {
@@ -76,8 +76,22 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Network-first para páginas/datos: el vendedor siempre debe ver stock/ventas frescos.
+  // Network-first para páginas: siempre se intenta lo más fresco primero, pero
+  // se guarda una copia para que la app cargue igual si luego se pierde la señal
+  // a medio turno. Las rutas de /api/ nunca se cachean aquí — esas se manejan
+  // con datos locales propios (ver src/lib/offline-db.ts) para no mezclar
+  // fuentes de verdad.
+  if (url.pathname.startsWith("/api/")) return;
+
   event.respondWith(
-    fetch(request).catch(() => caches.match(request).then((r) => r || caches.match("/")))
+    fetch(request)
+      .then((response) => {
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+        }
+        return response;
+      })
+      .catch(() => caches.match(request).then((r) => r || caches.match("/")))
   );
 });

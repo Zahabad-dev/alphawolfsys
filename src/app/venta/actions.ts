@@ -80,3 +80,30 @@ export async function registrarVentaAction(input: {
 
   return { success: { cantidad: input.cantidad, total: input.cantidad * precio } };
 }
+
+/**
+ * Una venta guardada offline (celular sin señal) que al sincronizar fue
+ * rechazada por el servidor (ej. ya no hay stock, precio desactivado) no se
+ * puede reintentar sola — se reporta a la bandeja de soporte para que un
+ * admin decida qué hacer, en vez de perderse en silencio.
+ */
+export async function reportarVentaOfflineFallidaAction(input: {
+  qrToken: string;
+  cantidad: number;
+  mensaje: string;
+}) {
+  const session = await auth();
+  const user = session?.user;
+  if (!user || user.rol !== "vendedor") return;
+
+  await query(
+    `INSERT INTO errores_soporte (origen, workflow, mensaje, detalle)
+     VALUES ($1, $2, $3, $4)`,
+    [
+      "app:venta-offline",
+      user.sucursalId ? `sucursal-${user.sucursalId}` : null,
+      `No se pudo sincronizar una venta guardada sin conexión: ${input.mensaje}`,
+      JSON.stringify({ qrToken: input.qrToken, cantidad: input.cantidad, vendedor: user.name }),
+    ]
+  );
+}

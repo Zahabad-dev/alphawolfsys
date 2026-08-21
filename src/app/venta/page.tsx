@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
 import Header from "@/components/Header";
+import Sincronizar from "./sincronizar";
 
 interface SucursalRow {
   nombre: string;
@@ -52,6 +53,8 @@ export default async function VentaPage() {
         subtitulo={sucursal ? `${sucursal.nombre} — ${sucursal.estado}` : "Sucursal desconocida"}
       />
       <main className="flex flex-1 flex-col items-center gap-6 p-6">
+        <Sincronizar />
+
         <Link
           href="/venta/escanear"
           className="w-full max-w-sm rounded-2xl bg-brand-gold py-6 text-center text-2xl font-bold text-brand-black"

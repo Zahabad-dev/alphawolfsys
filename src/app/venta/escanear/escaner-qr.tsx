@@ -20,7 +20,7 @@ export default function EscanerQr() {
         const token = extraerToken(result.data);
         if (token) {
           scanner.stop();
-          router.push(`/venta/confirmar/${token}`);
+          router.push(`/venta/confirmar?token=${encodeURIComponent(token)}`);
         }
       },
       { highlightScanRegion: true, highlightCodeOutline: true }
