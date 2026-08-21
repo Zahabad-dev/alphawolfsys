@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
-import { generarQrConLogo, aJpeg, cmAPx } from "@/lib/qr";
+import { generarQrConLogo, conEtiqueta, aJpeg, cmAPx } from "@/lib/qr";
 import PrintButton from "./print-button";
 import QrControlsForm from "./qr-controls-form";
 
@@ -59,11 +59,17 @@ export default async function PrecioQrPage({
   // decisión ya confirmada, la app propia sigue leyendo el token igual.
   const qr = await generarQrConLogo(precio.qr_token, sizePx, { sinLogo });
   const pngDataUrl = `data:image/png;base64,${qr.buffer.toString("base64")}`;
-  const jpegBuffer = await aJpeg(qr.buffer);
-  const jpegDataUrl = `data:image/jpeg;base64,${jpegBuffer.toString("base64")}`;
   const outerCm = (sizeCm * qr.size) / sizePx;
   const etiqueta = `$${Number(precio.precio_mxn).toFixed(2)} · ${precio.sucursal_clave}`;
   const nombreArchivo = `qr-${precio.sucursal_clave}-${Number(precio.precio_mxn).toFixed(2)}`;
+
+  // Los botones de descarga usan una versión aparte con el precio+sucursal
+  // horneado dentro de la imagen misma — si se imprime desde otro programa
+  // (no desde esta página), ese texto tiene que venir en el archivo o se pierde.
+  const conTexto = await conEtiqueta(qr.buffer, qr.size, etiqueta);
+  const pngDescargaUrl = `data:image/png;base64,${conTexto.toString("base64")}`;
+  const jpegBuffer = await aJpeg(conTexto);
+  const jpegDescargaUrl = `data:image/jpeg;base64,${jpegBuffer.toString("base64")}`;
 
   return (
     <div className="flex min-h-screen flex-col items-center gap-6 bg-white p-8 text-black print:p-0">
@@ -91,14 +97,14 @@ export default async function PrecioQrPage({
 
           <div className="flex gap-3 print:hidden">
             <a
-              href={pngDataUrl}
+              href={pngDescargaUrl}
               download={`${nombreArchivo}.png`}
               className="rounded-full border border-black/20 px-4 py-1.5 text-sm text-black hover:border-black"
             >
               Descargar PNG (recomendado)
             </a>
             <a
-              href={jpegDataUrl}
+              href={jpegDescargaUrl}
               download={`${nombreArchivo}.jpg`}
               className="rounded-full border border-black/20 px-4 py-1.5 text-sm text-black/70 hover:border-black"
             >

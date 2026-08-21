@@ -119,3 +119,41 @@ export async function generarQrConLogo(
 export async function aJpeg(buffer: Buffer): Promise<Buffer> {
   return sharp(buffer).jpeg({ quality: 95, chromaSubsampling: "4:4:4" }).toBuffer();
 }
+
+function escaparXml(texto: string): string {
+  return texto
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * Agrega el precio+sucursal como texto horneado debajo del QR, en la MISMA
+ * imagen. Necesario para los botones de descarga: si alguien guarda el PNG/JPG
+ * y lo imprime desde otro programa (no desde esta página), ese texto en HTML
+ * aparte nunca llega — así queda dentro del archivo pase lo que pase.
+ */
+export async function conEtiqueta(qrBuffer: Buffer, qrSize: number, etiqueta: string): Promise<Buffer> {
+  const alturaTexto = Math.round(qrSize * 0.14);
+  const fontSize = Math.round(alturaTexto * 0.5);
+
+  const svgTexto = `
+    <svg width="${qrSize}" height="${alturaTexto}" xmlns="http://www.w3.org/2000/svg">
+      <rect width="100%" height="100%" fill="#ffffff" />
+      <text x="50%" y="52%" font-family="Arial, sans-serif" font-size="${fontSize}"
+            fill="#000000" text-anchor="middle" dominant-baseline="middle">${escaparXml(etiqueta)}</text>
+    </svg>
+  `;
+  const textoBuffer = await sharp(Buffer.from(svgTexto)).png().toBuffer();
+
+  return sharp({
+    create: { width: qrSize, height: qrSize + alturaTexto, channels: 4, background: "#ffffff" },
+  })
+    .composite([
+      { input: qrBuffer, top: 0, left: 0 },
+      { input: textoBuffer, top: qrSize, left: 0 },
+    ])
+    .png()
+    .toBuffer();
+}
