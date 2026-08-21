@@ -6,6 +6,7 @@ export default function QrControlsForm({
   sizeCm,
   modo,
   copias,
+  sinLogo,
   sizeCmMin,
   sizeCmMax,
   copiasMax,
@@ -13,6 +14,7 @@ export default function QrControlsForm({
   sizeCm: number;
   modo: "unico" | "hoja";
   copias: number;
+  sinLogo: boolean;
   sizeCmMin: number;
   sizeCmMax: number;
   copiasMax: number;
@@ -45,6 +47,11 @@ export default function QrControlsForm({
           <option value="unico">Un solo QR</option>
           <option value="hoja">Planilla (hoja completa)</option>
         </select>
+      </label>
+
+      <label className="flex items-center gap-2 pb-2 text-sm text-black/70">
+        <input type="checkbox" name="sin_logo" value="1" defaultChecked={sinLogo} />
+        Sin logo (recomendado en tamaños chicos)
       </label>
 
       {modoSeleccionado === "hoja" && (

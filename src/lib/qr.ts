@@ -18,7 +18,9 @@ export interface QrGenerado {
 
 // DPI usado para rasterizar el QR — el tamaño físico real al imprimir lo controla
 // el CSS en cm, esto solo define qué tan nítido se ve el PNG a ese tamaño.
-const DPI_IMPRESION = 300;
+// 600 en vez de 300 para que los módulos salgan más definidos en impresoras
+// normales (no térmicas), donde el sangrado de tinta ya de por sí es peor.
+const DPI_IMPRESION = 600;
 
 export function cmAPx(cm: number): number {
   return Math.round((cm / 2.54) * DPI_IMPRESION);
@@ -79,16 +81,24 @@ async function generarQrBaseConLogo(texto: string, size: number): Promise<Buffer
 /**
  * Genera el QR imprimible: logo al centro + contorno degradado (dorado→morado→caramelo oscuro).
  * Si algo falla (logo faltante, etc.) cae a un QR plano sin adornos — el QR nunca deja de generarse.
+ * `sinLogo` omite el logo central (pero conserva el contorno) — en tamaños muy chicos (2cm),
+ * el logo tapa módulos reales y, combinado con impresoras no térmicas, puede afectar la lectura.
  */
-export async function generarQrConLogo(texto: string, size: number): Promise<QrGenerado> {
+export async function generarQrConLogo(
+  texto: string,
+  size: number,
+  opciones: { sinLogo?: boolean } = {}
+): Promise<QrGenerado> {
   const borde = Math.max(BORDE_MIN_PX, Math.round(size * PROPORCION_BORDE));
   const outerSize = size + borde * 2;
 
   try {
-    const qrConLogo = await generarQrBaseConLogo(texto, size);
+    const qrBase = opciones.sinLogo
+      ? await QRCode.toBuffer(texto, { width: size, margin: 2, errorCorrectionLevel: "H" })
+      : await generarQrBaseConLogo(texto, size);
     const fondo = await generarContornoDegradado(outerSize, Math.round(borde * 0.7));
     const buffer = await sharp(fondo)
-      .composite([{ input: qrConLogo, gravity: "center" }])
+      .composite([{ input: qrBase, gravity: "center" }])
       .png()
       .toBuffer();
     return { buffer, size: outerSize };
@@ -101,4 +111,11 @@ export async function generarQrConLogo(texto: string, size: number): Promise<QrG
     });
     return { buffer, size };
   }
+}
+
+/** Conversión a JPG bajo demanda — PNG sigue siendo lo recomendado para imprimir
+ * (JPG es con pérdida y difumina justo los bordes duros que un QR necesita nítidos),
+ * pero se ofrece por si hace falta compatibilidad con otro programa. */
+export async function aJpeg(buffer: Buffer): Promise<Buffer> {
+  return sharp(buffer).jpeg({ quality: 95, chromaSubsampling: "4:4:4" }).toBuffer();
 }

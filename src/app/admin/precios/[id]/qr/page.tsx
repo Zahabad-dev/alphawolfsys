@@ -1,8 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
-import { getBaseUrl } from "@/lib/url";
-import { generarQrConLogo, cmAPx } from "@/lib/qr";
+import { generarQrConLogo, aJpeg, cmAPx } from "@/lib/qr";
 import PrintButton from "./print-button";
 import QrControlsForm from "./qr-controls-form";
 
@@ -49,15 +48,22 @@ export default async function PrecioQrPage({
   const sizeCm = num(sp.size_cm, SIZE_CM_DEFAULT, SIZE_CM_MIN, SIZE_CM_MAX);
   const modo = sp.modo === "hoja" ? "hoja" : "unico";
   const copias = num(sp.copias, COPIAS_DEFAULT, 1, COPIAS_MAX);
+  const sinLogo = sp.sin_logo === "1";
 
   const sizePx = cmAPx(sizeCm);
 
-  const baseUrl = await getBaseUrl();
-  const scanUrl = `${baseUrl}/scan/${precio.qr_token}`;
-  const qr = await generarQrConLogo(scanUrl, sizePx);
-  const qrDataUrl = `data:image/png;base64,${qr.buffer.toString("base64")}`;
+  // Se codifica solo el token (no la URL completa): menos texto = QR menos
+  // denso = módulos más grandes a un mismo tamaño físico, clave para que se
+  // lea bien impreso chico en impresoras normales (no térmicas). A cambio,
+  // un lector de cámara genérico fuera de la app ya no abre un link solo —
+  // decisión ya confirmada, la app propia sigue leyendo el token igual.
+  const qr = await generarQrConLogo(precio.qr_token, sizePx, { sinLogo });
+  const pngDataUrl = `data:image/png;base64,${qr.buffer.toString("base64")}`;
+  const jpegBuffer = await aJpeg(qr.buffer);
+  const jpegDataUrl = `data:image/jpeg;base64,${jpegBuffer.toString("base64")}`;
   const outerCm = (sizeCm * qr.size) / sizePx;
   const etiqueta = `$${Number(precio.precio_mxn).toFixed(2)} · ${precio.sucursal_clave}`;
+  const nombreArchivo = `qr-${precio.sucursal_clave}-${Number(precio.precio_mxn).toFixed(2)}`;
 
   return (
     <div className="flex min-h-screen flex-col items-center gap-6 bg-white p-8 text-black print:p-0">
@@ -67,20 +73,38 @@ export default async function PrecioQrPage({
         sizeCm={sizeCm}
         modo={modo}
         copias={copias}
+        sinLogo={sinLogo}
         sizeCmMin={SIZE_CM_MIN}
         sizeCmMax={SIZE_CM_MAX}
         copiasMax={COPIAS_MAX}
       />
 
       {modo === "unico" ? (
-        <div className="flex flex-col items-center gap-2 rounded-2xl border border-black/10 p-8 print:border-0">
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-black/10 p-8 print:border-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={qrDataUrl}
+            src={pngDataUrl}
             alt={`QR ${etiqueta}`}
             style={{ width: `${outerCm}cm`, height: `${outerCm}cm` }}
           />
           <p className="text-sm text-black/70">{etiqueta}</p>
+
+          <div className="flex gap-3 print:hidden">
+            <a
+              href={pngDataUrl}
+              download={`${nombreArchivo}.png`}
+              className="rounded-full border border-black/20 px-4 py-1.5 text-sm text-black hover:border-black"
+            >
+              Descargar PNG (recomendado)
+            </a>
+            <a
+              href={jpegDataUrl}
+              download={`${nombreArchivo}.jpg`}
+              className="rounded-full border border-black/20 px-4 py-1.5 text-sm text-black/70 hover:border-black"
+            >
+              Descargar JPG
+            </a>
+          </div>
         </div>
       ) : (
         <div
@@ -91,7 +115,7 @@ export default async function PrecioQrPage({
             <div key={i} className="flex flex-col items-center">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={qrDataUrl}
+                src={pngDataUrl}
                 alt={`QR ${etiqueta}`}
                 style={{ width: `${outerCm}cm`, height: `${outerCm}cm` }}
               />
