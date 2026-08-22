@@ -92,6 +92,18 @@ self.addEventListener("fetch", (event) => {
         }
         return response;
       })
-      .catch(() => caches.match(request).then((r) => r || caches.match("/")))
+      .catch(() =>
+        caches.match(request).then((exacto) => {
+          if (exacto) return exacto;
+          // Páginas como /venta/confirmar cambian de query string por cada QR
+          // escaneado (?token=...) pero el HTML/JS es siempre el mismo shell
+          // estático — si nunca se cacheó ESE token exacto, cualquier otra
+          // copia de la misma ruta sirve igual (el token real lo lee el
+          // cliente de la URL de verdad, no de la respuesta cacheada).
+          return caches
+            .match(request, { ignoreSearch: true })
+            .then((aproximado) => aproximado || caches.match("/"));
+        })
+      )
   );
 });
