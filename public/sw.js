@@ -1,13 +1,27 @@
 // Las ventas ahora sí soportan cola offline (ver src/lib/offline-db.ts) — el
 // vendedor cuenta y guarda local si no hay señal, se sincroniza sola después.
 // Aquí solo nos aseguramos de que la app misma (el "shell") cargue sin señal.
-const CACHE_NAME = "wd-inventario-v3";
+const CACHE_NAME = "wd-inventario-v4";
 const ESTATICOS_PREFIX = ["/_next/static/", "/icons/"];
 
 // Pantallas del flujo de venta que se precargan apenas se instala el service
 // worker — así funcionan sin señal desde la primera vez que se abre la app,
 // sin depender de que el vendedor haya visitado cada una a mano antes.
-const PRECARGA_URLS = ["/", "/venta", "/venta/escanear", "/venta/confirmar"];
+// OJO: "/" no se precarga a propósito — es una redirección que depende de
+// con qué sesión/rol se instaló el service worker (admin vs vendedor), y
+// guardarla causaba que un admin sin señal terminara viendo una pantalla
+// de vendedor cacheada de otra sesión, sin relación con lo que veía.
+const PRECARGA_URLS = ["/venta", "/venta/escanear", "/venta/confirmar", "/offline"];
+
+// Solo estas rutas (venta) tienen un respaldo "inteligente" que ignora el
+// query string — son las únicas donde de verdad hace falta trabajar sin
+// señal. Cualquier otra sección (admin, soporte, etc.) sin caché exacta cae
+// a /offline con un aviso claro, en vez de mostrar una pantalla sin relación.
+const RUTAS_CRITICAS_OFFLINE = ["/venta", "/venta/escanear", "/venta/confirmar"];
+
+function esRutaCriticaOffline(pathname) {
+  return RUTAS_CRITICAS_OFFLINE.some((ruta) => pathname === ruta || pathname.startsWith(ruta + "/"));
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -116,14 +130,22 @@ self.addEventListener("fetch", (event) => {
       .catch(() =>
         caches.match(request).then((exacto) => {
           if (exacto) return exacto;
-          // Páginas como /venta/confirmar cambian de query string por cada QR
-          // escaneado (?token=...) pero el HTML/JS es siempre el mismo shell
-          // estático — si nunca se cacheó ESE token exacto, cualquier otra
-          // copia de la misma ruta sirve igual (el token real lo lee el
-          // cliente de la URL de verdad, no de la respuesta cacheada).
-          return caches
-            .match(request, { ignoreSearch: true })
-            .then((aproximado) => aproximado || caches.match("/"));
+
+          if (esRutaCriticaOffline(url.pathname)) {
+            // Páginas como /venta/confirmar cambian de query string por cada
+            // QR escaneado (?token=...) pero el HTML/JS es siempre el mismo
+            // shell estático — si nunca se cacheó ESE token exacto, cualquier
+            // otra copia de la misma ruta sirve igual (el token real lo lee
+            // el cliente de la URL de verdad, no de la respuesta cacheada).
+            return caches
+              .match(request, { ignoreSearch: true })
+              .then((aproximado) => aproximado || caches.match("/offline"));
+          }
+
+          // Fuera del flujo de venta (admin, soporte, etc.) no hay un
+          // respaldo razonable sin datos reales del servidor — mejor avisar
+          // claro que fallar mostrando algo sin relación.
+          return caches.match("/offline");
         })
       )
   );
