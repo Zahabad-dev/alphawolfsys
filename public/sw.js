@@ -1,10 +1,31 @@
 // Las ventas ahora sí soportan cola offline (ver src/lib/offline-db.ts) — el
 // vendedor cuenta y guarda local si no hay señal, se sincroniza sola después.
 // Aquí solo nos aseguramos de que la app misma (el "shell") cargue sin señal.
-const CACHE_NAME = "wd-inventario-v2";
+const CACHE_NAME = "wd-inventario-v3";
 const ESTATICOS_PREFIX = ["/_next/static/", "/icons/"];
 
-self.addEventListener("install", () => {
+// Pantallas del flujo de venta que se precargan apenas se instala el service
+// worker — así funcionan sin señal desde la primera vez que se abre la app,
+// sin depender de que el vendedor haya visitado cada una a mano antes.
+const PRECARGA_URLS = ["/", "/venta", "/venta/escanear", "/venta/confirmar"];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.all(
+        PRECARGA_URLS.map((url) =>
+          fetch(url, { credentials: "same-origin" })
+            .then((response) => {
+              if (response.ok) return cache.put(url, response);
+            })
+            .catch(() => {
+              // Sin señal en el momento de instalar, o la ruta pidió login —
+              // no debe tumbar la instalación del resto del service worker.
+            })
+        )
+      )
+    )
+  );
   self.skipWaiting();
 });
 
