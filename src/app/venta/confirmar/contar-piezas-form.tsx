@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import QrScanner from "qr-scanner";
 import { extraerToken } from "@/lib/qr-token";
 import { registrarVentaAction } from "@/app/venta/actions";
@@ -30,7 +29,6 @@ export default function ContarPiezasForm({
   const videoRef = useRef<HTMLVideoElement>(null);
   const scannerRef = useRef<QrScanner | null>(null);
   const bloqueadoRef = useRef(false);
-  const router = useRouter();
 
   const [piezas, setPiezas] = useState(0);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -79,7 +77,7 @@ export default function ContarPiezasForm({
   }
 
   function cancelarVenta() {
-    router.push("/venta");
+    window.location.href = "/venta";
   }
 
   async function finalizarVenta() {

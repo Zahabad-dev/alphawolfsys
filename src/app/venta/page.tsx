@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
@@ -55,19 +54,23 @@ export default async function VentaPage() {
       <main className="flex flex-1 flex-col items-center gap-6 p-6">
         <Sincronizar />
 
-        <Link
+        {/* Enlaces normales (no <Link>) a propósito: una transición de Next.js
+            del lado del cliente pide un payload aparte que nunca queda en
+            caché offline; una navegación de página completa sí la sirve el
+            service worker sin problema. */}
+        <a
           href="/venta/escanear"
           className="w-full max-w-sm rounded-2xl bg-brand-gold py-6 text-center text-2xl font-bold text-brand-black"
         >
           Escanear lote
-        </Link>
+        </a>
 
-        <Link
+        <a
           href="/inventario"
           className="w-full max-w-sm rounded-full border border-white/10 py-2 text-center text-sm text-brand-cream/80"
         >
           Ver inventario de mi sucursal
-        </Link>
+        </a>
 
         <div className="w-full max-w-sm">
           <p className="mb-2 text-sm text-brand-cream/70">Ventas de hoy</p>

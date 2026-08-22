@@ -1,14 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import QrScanner from "qr-scanner";
 import { extraerToken } from "@/lib/qr-token";
 
 export default function EscanerQr() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const scannerRef = useRef<QrScanner | null>(null);
-  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -20,7 +18,11 @@ export default function EscanerQr() {
         const token = extraerToken(result.data);
         if (token) {
           scanner.stop();
-          router.push(`/venta/confirmar?token=${encodeURIComponent(token)}`);
+          // Navegación de página completa (no router.push): sin señal, la
+          // transición de Next.js pide un payload aparte que nunca quedó en
+          // caché y el navegador termina mostrando su propio error de "sin
+          // conexión". Una navegación real sí pasa por el service worker.
+          window.location.href = `/venta/confirmar?token=${encodeURIComponent(token)}`;
         }
       },
       { highlightScanRegion: true, highlightCodeOutline: true }
@@ -35,7 +37,7 @@ export default function EscanerQr() {
       scanner.stop();
       scanner.destroy();
     };
-  }, [router]);
+  }, []);
 
   return (
     <div className="flex flex-col items-center gap-4">
