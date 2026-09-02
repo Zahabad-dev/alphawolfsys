@@ -41,12 +41,27 @@ export async function registrarVentaAction(input: {
     "SELECT id, precio_mxn, sucursal_id, activo FROM lotes WHERE qr_token = $1",
     [input.qrToken]
   );
-  const lote = loteRows[0];
-  if (!lote || !lote.activo) {
+  const loteEscaneado = loteRows[0];
+  if (!loteEscaneado || !loteEscaneado.activo) {
     return { error: "Precio no encontrado o inactivo." };
   }
-  if (lote.sucursal_id !== user.sucursalId) {
-    return { error: "Este precio pertenece a otra sucursal." };
+
+  // La etiqueta física puede seguir siendo la de Almacén (traspaso hecho sin
+  // reetiquetar por falta de tiempo). En vez de bloquear, la venta se
+  // registra en el lote de la MISMA sucursal del vendedor con el mismo
+  // precio (que ya existe: cada sucursal tiene un lote por precio) — así el
+  // stock siempre cuadra con la sucursal real, sin depender de la etiqueta.
+  let lote = loteEscaneado;
+  if (loteEscaneado.sucursal_id !== user.sucursalId) {
+    const { rows: propioRows } = await query<LoteRow>(
+      "SELECT id, precio_mxn, sucursal_id, activo FROM lotes WHERE precio_mxn = $1 AND sucursal_id = $2",
+      [loteEscaneado.precio_mxn, user.sucursalId]
+    );
+    const propio = propioRows[0];
+    if (!propio || !propio.activo) {
+      return { error: "Este precio no está dado de alta en tu sucursal." };
+    }
+    lote = propio;
   }
 
   const { rows: stockRows } = await query<{ stock: string }>(
