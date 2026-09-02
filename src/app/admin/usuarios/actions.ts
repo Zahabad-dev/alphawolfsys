@@ -97,6 +97,42 @@ export async function reasignarSucursalAction(formData: FormData) {
   revalidatePath("/admin/usuarios");
 }
 
+export interface CambiarPasswordResult {
+  error?: string;
+  success?: string;
+}
+
+export async function cambiarPasswordVendedorAction(
+  _prevState: CambiarPasswordResult | undefined,
+  formData: FormData
+): Promise<CambiarPasswordResult> {
+  await requireAdmin();
+
+  const id = Number(formData.get("id"));
+  const password = formData.get("password");
+
+  if (!id) return { error: "Vendedor inválido." };
+  if (typeof password !== "string" || password.length < 8) {
+    return { error: "La contraseña debe tener al menos 8 caracteres." };
+  }
+
+  const { rows } = await query<{ username: string; rol: string }>(
+    "SELECT username, rol FROM usuarios WHERE id = $1",
+    [id]
+  );
+  const usuario = rows[0];
+  if (!usuario) return { error: "Vendedor no encontrado." };
+  if (usuario.rol !== "vendedor") {
+    return { error: "Solo se puede cambiar la contraseña de cuentas de vendedor." };
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  await query("UPDATE usuarios SET password_hash = $1 WHERE id = $2", [passwordHash, id]);
+
+  revalidatePath("/admin/usuarios");
+  return { success: `Contraseña de "${usuario.username}" actualizada.` };
+}
+
 export interface EliminarVendedorResult {
   error?: string;
   success?: string;
