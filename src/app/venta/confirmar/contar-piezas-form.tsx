@@ -6,7 +6,14 @@ import { extraerToken } from "@/lib/qr-token";
 import { registrarVentaAction } from "@/app/venta/actions";
 import { encolarVenta } from "@/lib/offline-db";
 
-const COOLDOWN_MS = 1800;
+// En vez de un temporizador fijo entre conteos, se exige que la cámara
+// reporte varios frames seguidos SIN ningún QR visible antes de aceptar la
+// siguiente pieza — así se cuenta casi al instante en cuanto se retira la
+// prenda contada, pero sigue bloqueado si el mismo QR se queda pegado en
+// cuadro (la causa real del conteo doble que teníamos antes). A ~25 escaneos
+// por segundo (default de qr-scanner), esto equivale a un colchón de
+// ~200ms — solo para no confundir un parpadeo de la cámara con "ya se fue".
+const FRAMES_LIBRES_REQUERIDOS = 5;
 const TIMEOUT_MS = 6000;
 
 function timeout(ms: number): Promise<never> {
@@ -28,7 +35,10 @@ export default function ContarPiezasForm({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const scannerRef = useRef<QrScanner | null>(null);
-  const bloqueadoRef = useRef(false);
+  // Arranca ya "en cero piezas y listo para contar" — si empezara en 0 la
+  // primera pieza tendría que esperar el mismo colchón que las demás, sin
+  // necesidad (nunca hubo nada en cuadro antes de la primera lectura).
+  const framesSinCodigoRef = useRef(FRAMES_LIBRES_REQUERIDOS);
 
   const [piezas, setPiezas] = useState(0);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -42,7 +52,14 @@ export default function ContarPiezasForm({
     const scanner = new QrScanner(
       videoRef.current,
       (result) => {
-        if (bloqueadoRef.current) return;
+        // Hay que leer el contador ANTES de reiniciarlo — si no, siempre
+        // se leería en 0 (recién puesto en esta misma llamada) y nunca
+        // se contaría nada.
+        const yaSeFueDeCuadro = framesSinCodigoRef.current >= FRAMES_LIBRES_REQUERIDOS;
+
+        // Se detectó un QR (sea o no el correcto) — ya no está "fuera de
+        // cuadro", así que se reinicia el contador de frames libres.
+        framesSinCodigoRef.current = 0;
 
         const token = extraerToken(result.data);
         if (token !== qrToken) {
@@ -50,15 +67,20 @@ export default function ContarPiezasForm({
           return;
         }
 
+        if (!yaSeFueDeCuadro) return;
+
         setAviso(null);
         setPiezas((actual) => actual + 1);
-
-        bloqueadoRef.current = true;
-        setTimeout(() => {
-          bloqueadoRef.current = false;
-        }, COOLDOWN_MS);
       },
-      { highlightScanRegion: true, highlightCodeOutline: true }
+      {
+        highlightScanRegion: true,
+        highlightCodeOutline: true,
+        onDecodeError: () => {
+          if (framesSinCodigoRef.current < FRAMES_LIBRES_REQUERIDOS) {
+            framesSinCodigoRef.current += 1;
+          }
+        },
+      }
     );
     scannerRef.current = scanner;
 
