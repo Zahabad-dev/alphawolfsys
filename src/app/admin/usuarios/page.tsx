@@ -6,6 +6,7 @@ import AdminNav from "@/components/AdminNav";
 import NuevoVendedorForm from "./nuevo-vendedor-form";
 import SucursalSelect from "./sucursal-select";
 import EliminarVendedorForm from "./eliminar-vendedor-form";
+import CambiarPasswordForm from "./cambiar-password-form";
 import { toggleUsuarioActivoAction } from "./actions";
 import type { Rol } from "@/types/next-auth";
 
@@ -95,6 +96,7 @@ export default async function AdminUsuariosPage() {
                               {u.activo ? "Desactivar" : "Activar"}
                             </button>
                           </form>
+                          <CambiarPasswordForm id={u.id} username={u.username} />
                           <EliminarVendedorForm id={u.id} username={u.username} />
                         </div>
                       </div>
