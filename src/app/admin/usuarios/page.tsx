@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
+import { esAdmin, puedeGestionar } from "@/lib/permisos";
 import Header from "@/components/Header";
 import AdminNav from "@/components/AdminNav";
 import NuevoVendedorForm from "./nuevo-vendedor-form";
@@ -28,8 +29,9 @@ interface SucursalRow {
 export default async function AdminUsuariosPage() {
   const session = await auth();
   if (!session || session.user.rol === "vendedor") redirect("/login");
-  // Solo el administrador crea/elimina; el gerente no debe ver botones que no puede usar.
-  const esAdmin = session.user.rol === "admin";
+  // Admin y gerente gestionan; eliminar vendedores/sucursales es solo del administrador.
+  const gestiona = puedeGestionar(session.user.rol);
+  const soloAdmin = esAdmin(session.user.rol);
 
   const [{ rows: usuarios }, { rows: sucursales }] = await Promise.all([
     query<UsuarioRow>(
@@ -46,7 +48,7 @@ export default async function AdminUsuariosPage() {
       <Header titulo="Vendedores" subtitulo="Gestión de usuarios" />
       <AdminNav />
       <main className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
-        {esAdmin && <NuevoVendedorForm sucursales={sucursales} />}
+        {gestiona && <NuevoVendedorForm sucursales={sucursales} />}
 
         <div className="overflow-x-auto rounded-2xl border border-white/10">
           <table className="w-full text-left text-sm">
@@ -98,8 +100,8 @@ export default async function AdminUsuariosPage() {
                               {u.activo ? "Desactivar" : "Activar"}
                             </button>
                           </form>
-                          {esAdmin && <CambiarPasswordForm id={u.id} username={u.username} />}
-                          {esAdmin && <EliminarVendedorForm id={u.id} username={u.username} />}
+                          {gestiona && <CambiarPasswordForm id={u.id} username={u.username} />}
+                          {soloAdmin && <EliminarVendedorForm id={u.id} username={u.username} />}
                         </div>
                       </div>
                     )}

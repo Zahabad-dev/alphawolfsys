@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
+import { puedeGestionar } from "@/lib/permisos";
 
 async function requireStaff() {
   const session = await auth();
@@ -23,8 +24,8 @@ export async function crearVendedorAction(
   formData: FormData
 ): Promise<CrearVendedorResult> {
   const sesion = await auth();
-  if (!sesion || sesion.user.rol !== "admin") {
-    return { error: "Solo un administrador puede crear usuarios." };
+  if (!sesion || !puedeGestionar(sesion.user.rol)) {
+    return { error: "No tienes permiso para crear usuarios." };
   }
 
   const username = formData.get("username");
@@ -102,8 +103,8 @@ export async function cambiarPasswordVendedorAction(
   formData: FormData
 ): Promise<CambiarPasswordResult> {
   const sesion = await auth();
-  if (!sesion || sesion.user.rol !== "admin") {
-    return { error: "Solo un administrador puede cambiar contraseñas." };
+  if (!sesion || !puedeGestionar(sesion.user.rol)) {
+    return { error: "No tienes permiso para cambiar contraseñas." };
   }
 
   const id = Number(formData.get("id"));

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
+import { puedeGestionar } from "@/lib/permisos";
 import { query } from "@/lib/db";
 import { verificarUmbralYNotificar } from "@/lib/push";
 
@@ -57,15 +58,15 @@ export interface RegistrarAjusteResult {
 
 /**
  * Corrige el stock del Almacén (merma, error de captura, etc.). Solo admin —
- * a diferencia del corte, un ajuste puede restar piezas, así que queda fuera
- * de lo que gerente puede hacer.
+ * a diferencia del corte, un ajuste puede restar piezas; por eso exige nota
+ * obligatoria y queda registrado quién lo hizo. Administrador y gerente pueden.
  */
 export async function registrarAjusteAction(
   _prevState: RegistrarAjusteResult | undefined,
   formData: FormData
 ): Promise<RegistrarAjusteResult> {
   const session = await auth();
-  if (!session || session.user.rol !== "admin") {
+  if (!session || !puedeGestionar(session.user.rol)) {
     return { error: "No autorizado." };
   }
 

@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
+import { puedeGestionar } from "@/lib/permisos";
 
 async function requireStaff() {
   const session = await auth();
@@ -25,8 +26,8 @@ export async function crearPrecioAction(
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
   const sesion = await auth();
-  if (!sesion || sesion.user.rol !== "admin") {
-    return { error: "Solo un administrador puede agregar precios al Almacén." };
+  if (!sesion || !puedeGestionar(sesion.user.rol)) {
+    return { error: "No tienes permiso para agregar precios al Almacén." };
   }
 
   const precio = formData.get("precio_mxn");
@@ -171,7 +172,7 @@ export async function eliminarPrecioAction(
   formData: FormData
 ): Promise<EliminarPrecioResult> {
   const session = await auth();
-  if (!session || session.user.rol !== "admin") {
+  if (!session || !puedeGestionar(session.user.rol)) {
     return { error: "No autorizado." };
   }
 

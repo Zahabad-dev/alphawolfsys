@@ -3,6 +3,7 @@
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
+import { puedeGestionar } from "@/lib/permisos";
 import { query, withTransaction } from "@/lib/db";
 
 async function requireStaff() {
@@ -54,8 +55,8 @@ export async function crearSucursalAction(
   formData: FormData
 ): Promise<CrearSucursalResult> {
   const sesion = await auth();
-  if (!sesion || sesion.user.rol !== "admin") {
-    return { error: "Solo un administrador puede crear sucursales." };
+  if (!sesion || !puedeGestionar(sesion.user.rol)) {
+    return { error: "No tienes permiso para crear sucursales." };
   }
 
   const clave = formData.get("clave");
