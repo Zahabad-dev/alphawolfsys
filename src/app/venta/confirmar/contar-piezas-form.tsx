@@ -15,7 +15,14 @@ import { enviarVenta, type EnvioResultado } from "../enviar-venta";
 import ResumenVenta from "../resumen-venta";
 import ResultadoVenta from "../resultado-venta";
 
-const COOLDOWN_MS = 1800;
+// En vez de un temporizador fijo entre conteos, se exige que la cámara
+// reporte varios frames seguidos SIN ningún QR visible antes de aceptar la
+// siguiente pieza — así se cuenta casi al instante en cuanto se retira la
+// prenda contada, pero sigue bloqueado si el mismo QR se queda pegado en
+// cuadro (la causa real del conteo doble que teníamos antes). A ~25 escaneos
+// por segundo (default de qr-scanner), esto equivale a un colchón de
+// ~200ms — solo para no confundir un parpadeo de la cámara con "ya se fue".
+const FRAMES_LIBRES_REQUERIDOS = 5;
 /** A partir de esta cantidad en un solo precio se pide confirmar (evita 3000 en vez de 30). */
 const LIMITE_ALERTA_PIEZAS = 500;
 
@@ -34,7 +41,10 @@ export default function ContarPiezasForm({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const scannerRef = useRef<QrScanner | null>(null);
-  const bloqueadoRef = useRef(false);
+  // Arranca ya "en cero piezas y listo para contar" — si empezara en 0 la
+  // primera pieza tendría que esperar el mismo colchón que las demás, sin
+  // necesidad (nunca hubo nada en cuadro antes de la primera lectura).
+  const framesSinCodigoRef = useRef(FRAMES_LIBRES_REQUERIDOS);
   const precioRef = useRef(precio);
 
   const carrito = useCarrito();
@@ -48,41 +58,56 @@ export default function ContarPiezasForm({
   useEffect(() => {
     if (resultado || !videoRef.current) return;
 
-    async function procesarLectura(texto: string) {
-      const token = extraerToken(texto);
-      if (!token) return;
-
-      // Misma prenda: o el mismo QR, o una etiqueta de otra sucursal (ej. Almacén)
-      // que corresponde al mismo precio.
-      let mismaPrenda = token === qrToken;
-      if (!mismaPrenda) {
-        const otro = await buscarEnCatalogo(token);
-        mismaPrenda = otro !== null && otro.precio === precioRef.current;
-      }
-
-      if (!mismaPrenda) {
-        setAviso(
-          "Ese código es de otro precio. Si quieres venderlo también, toca «Agregar y escanear otro precio»."
-        );
-        return;
-      }
-
+    const contarPieza = () => {
       setAviso(null);
       setPiezas((actual) => actual + 1);
-    }
+    };
 
     const scanner = new QrScanner(
       videoRef.current,
       (result) => {
-        if (bloqueadoRef.current) return;
-        bloqueadoRef.current = true;
-        void procesarLectura(result.data).finally(() => {
-          setTimeout(() => {
-            bloqueadoRef.current = false;
-          }, COOLDOWN_MS);
+        // Hay que leer el contador ANTES de reiniciarlo — si no, siempre
+        // se leería en 0 (recién puesto en esta misma llamada) y nunca
+        // se contaría nada.
+        const yaSeFueDeCuadro = framesSinCodigoRef.current >= FRAMES_LIBRES_REQUERIDOS;
+
+        // Se detectó un QR (sea o no el correcto) — ya no está "fuera de
+        // cuadro", así que se reinicia el contador de frames libres.
+        framesSinCodigoRef.current = 0;
+
+        const token = extraerToken(result.data);
+        if (!token) return;
+
+        // Mientras la misma prenda siga pegada en cuadro no se cuenta ni se
+        // vuelve a analizar (evita repetir la búsqueda en cada frame).
+        if (!yaSeFueDeCuadro) return;
+
+        if (token === qrToken) {
+          contarPieza();
+          return;
+        }
+
+        // Otro código: puede ser una etiqueta de otra sucursal (ej. Almacén) con
+        // el MISMO precio — cuenta como la misma prenda. Si es de otro precio, avisa.
+        void buscarEnCatalogo(token).then((otro) => {
+          if (otro && otro.precio === precioRef.current) {
+            contarPieza();
+          } else {
+            setAviso(
+              "Ese código es de otro precio. Si quieres venderlo también, toca «Agregar y escanear otro precio»."
+            );
+          }
         });
       },
-      { highlightScanRegion: true, highlightCodeOutline: true }
+      {
+        highlightScanRegion: true,
+        highlightCodeOutline: true,
+        onDecodeError: () => {
+          if (framesSinCodigoRef.current < FRAMES_LIBRES_REQUERIDOS) {
+            framesSinCodigoRef.current += 1;
+          }
+        },
+      }
     );
     scannerRef.current = scanner;
 
