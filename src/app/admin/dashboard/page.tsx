@@ -4,6 +4,7 @@ import { query } from "@/lib/db";
 import Header from "@/components/Header";
 import AdminNav from "@/components/AdminNav";
 import NotificacionesToggle from "./notificaciones-toggle";
+import { etiquetaMotivo } from "@/lib/motivos-salida";
 
 interface ResumenRow {
   piezas_hoy: number;
@@ -28,6 +29,12 @@ interface TopLoteRow {
   piezas: number;
 }
 
+interface SalidaMotivoRow {
+  motivo: string;
+  piezas: number;
+  valor: string;
+}
+
 interface StockBajoRow {
   lote_id: number;
   nombre: string;
@@ -43,7 +50,13 @@ export default async function AdminDashboardPage() {
   const session = await auth();
   if (!session || session.user.rol === "vendedor") redirect("/login");
 
-  const [{ rows: resumenRows }, { rows: porSucursal }, { rows: topLotes }, { rows: stockBajo }] =
+  const [
+    { rows: resumenRows },
+    { rows: porSucursal },
+    { rows: topLotes },
+    { rows: stockBajo },
+    { rows: salidasMes },
+  ] =
     await Promise.all([
       query<ResumenRow>(
         `SELECT
@@ -89,6 +102,16 @@ export default async function AdminDashboardPage() {
          WHERE sa.stock <= l.umbral_stock
          ORDER BY sa.stock ASC`
       ),
+      query<SalidaMotivoRow>(
+        `SELECT m.motivo,
+                SUM(-m.cantidad)::int AS piezas,
+                SUM(-m.cantidad * COALESCE(m.precio_unitario_mxn, l.precio_mxn)) AS valor
+         FROM movimientos_inventario m
+         JOIN lotes l ON l.id = m.lote_id
+         WHERE m.tipo = 'salida' AND m.creado_en >= date_trunc('month', now())
+         GROUP BY m.motivo
+         ORDER BY piezas DESC`
+      ),
     ]);
 
   const resumen = resumenRows[0];
@@ -131,6 +154,23 @@ export default async function AdminDashboardPage() {
                 </li>
               ))}
             </ul>
+          </section>
+        )}
+
+        {salidasMes.length > 0 && (
+          <section>
+            <p className="mb-3 text-sm text-brand-cream/70">Salidas sin venta (este mes)</p>
+            <div className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-brand-gray2 p-4">
+              {salidasMes.map((s) => (
+                <div key={s.motivo} className="flex justify-between text-sm">
+                  <span>{etiquetaMotivo(s.motivo)}</span>
+                  <span className="text-brand-gold">
+                    {s.piezas} pzs — {money(s.valor)}{" "}
+                    <span className="text-xs text-brand-cream/50">a precio de lista</span>
+                  </span>
+                </div>
+              ))}
+            </div>
           </section>
         )}
 

@@ -4,10 +4,18 @@ import { query } from "@/lib/db";
 import Header from "@/components/Header";
 import Sincronizar from "./sincronizar";
 import VentaEnCurso from "./venta-en-curso";
+import { etiquetaMotivo } from "@/lib/motivos-salida";
 
 interface SucursalRow {
   nombre: string;
   estado: string;
+}
+
+interface SalidaHoyRow {
+  lote_nombre: string;
+  cantidad: number;
+  motivo: string | null;
+  hora: string;
 }
 
 interface VentaHoyRow {
@@ -46,6 +54,17 @@ export default async function VentaPage() {
     [user.sucursalId]
   );
 
+  const { rows: salidasHoy } = await query<SalidaHoyRow>(
+    `SELECT l.nombre AS lote_nombre, -m.cantidad AS cantidad, m.motivo,
+            to_char(m.creado_en, 'HH24:MI') AS hora
+     FROM movimientos_inventario m
+     JOIN lotes l ON l.id = m.lote_id
+     WHERE m.tipo = 'salida' AND m.sucursal_id = $1 AND m.creado_en >= CURRENT_DATE
+     ORDER BY m.creado_en DESC
+     LIMIT 20`,
+    [user.sucursalId]
+  );
+
   return (
     <div className="flex min-h-screen flex-col">
       <Header
@@ -65,6 +84,18 @@ export default async function VentaPage() {
           className="w-full max-w-sm rounded-2xl bg-brand-gold py-6 text-center text-2xl font-bold text-brand-black"
         >
           Escanear lote
+        </a>
+
+        {/* Salidas que no son venta: regalos, saldos, merma, muestras. Enlace normal
+            (no <Link>) por la misma razón que el resto del flujo de venta. */}
+        <a
+          href="/venta/salida"
+          className="w-full max-w-sm rounded-2xl border border-brand-gold/60 py-4 text-center text-xl font-semibold text-brand-gold"
+        >
+          Escanear salida
+          <span className="mt-0.5 block text-xs font-normal text-brand-cream/60">
+            Regalo, saldo, merma, muestra…
+          </span>
         </a>
 
         <a
@@ -93,6 +124,25 @@ export default async function VentaPage() {
             )}
           </div>
         </div>
+
+        {salidasHoy.length > 0 && (
+          <div className="w-full max-w-sm">
+            <p className="mb-2 text-sm text-brand-cream/70">Salidas de hoy (sin venta)</p>
+            <div className="flex flex-col gap-2">
+              {salidasHoy.map((s, i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between rounded-lg border border-white/10 bg-brand-gray2 px-3 py-2 text-sm"
+                >
+                  <span>
+                    {s.hora} — {s.lote_nombre} × {s.cantidad}
+                  </span>
+                  <span className="text-brand-cream/60">{etiquetaMotivo(s.motivo)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

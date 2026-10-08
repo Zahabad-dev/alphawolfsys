@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { query } from "@/lib/db";
 import Header from "@/components/Header";
 import AdminNav from "@/components/AdminNav";
+import { etiquetaMotivo } from "@/lib/motivos-salida";
 
 interface SucursalRow {
   id: number;
@@ -19,6 +20,7 @@ interface MovimientoRow {
   precio_unitario_mxn: string | null;
   usuario_nombre: string;
   nota: string | null;
+  motivo: string | null;
 }
 
 const TIPOS = [
@@ -28,6 +30,7 @@ const TIPOS = [
   "corte",
   "traspaso_salida",
   "traspaso_entrada",
+  "salida",
 ] as const;
 
 export default async function AdminHistorialPage({
@@ -70,7 +73,7 @@ export default async function AdminHistorialPage({
     query<SucursalRow>("SELECT id, nombre FROM sucursales ORDER BY nombre"),
     query<MovimientoRow>(
       `SELECT m.id, m.creado_en, s.nombre AS sucursal_nombre, l.nombre AS lote_nombre,
-              m.tipo, m.cantidad, m.precio_unitario_mxn, u.nombre AS usuario_nombre, m.nota
+              m.tipo, m.cantidad, m.precio_unitario_mxn, u.nombre AS usuario_nombre, m.nota, m.motivo
        FROM movimientos_inventario m
        JOIN sucursales s ON s.id = m.sucursal_id
        JOIN lotes l ON l.id = m.lote_id
@@ -178,7 +181,12 @@ export default async function AdminHistorialPage({
                   </td>
                   <td className="px-4 py-2">{m.sucursal_nombre}</td>
                   <td className="px-4 py-2">{m.lote_nombre}</td>
-                  <td className="px-4 py-2 capitalize">{m.tipo}</td>
+                  <td className="px-4 py-2 capitalize">
+                    {m.tipo}
+                    {m.motivo && (
+                      <span className="ml-1 normal-case text-brand-gold">· {etiquetaMotivo(m.motivo)}</span>
+                    )}
+                  </td>
                   <td
                     className={`px-4 py-2 ${m.cantidad < 0 ? "text-brand-red" : "text-brand-green"}`}
                   >

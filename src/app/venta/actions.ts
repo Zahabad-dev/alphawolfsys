@@ -3,6 +3,7 @@
 import { auth } from "@/auth";
 import { query, withTransaction } from "@/lib/db";
 import { verificarUmbralYNotificar } from "@/lib/push";
+import { esMotivoSalida, NOTA_SALIDA_MAX, type MotivoSalida } from "@/lib/motivos-salida";
 
 interface LoteRow {
   id: number;
@@ -248,6 +249,101 @@ export async function registrarVentaCarritoAction(input: {
   }
 
   return { success: { piezas, total } };
+}
+
+export interface RegistrarSalidaResult {
+  error?: string;
+  success?: { cantidad: number; motivo: MotivoSalida; precio: number };
+}
+
+/**
+ * Registra una SALIDA que no es venta (regalo, saldo, merma, muestra, otro): la
+ * prenda sale del inventario de la sucursal del vendedor con su motivo, para que
+ * no siga contando como existencia. Mismo cuidado que la venta: bloquea el lote
+ * (sin stock negativo por carrera), es idempotente por idempotency_key y acepta
+ * la etiqueta de otra sucursal con el mismo precio.
+ */
+export async function registrarSalidaAction(input: {
+  qrToken: string;
+  cantidad: number;
+  motivo: string;
+  nota?: string;
+  idempotencyKey: string;
+}): Promise<RegistrarSalidaResult> {
+  const session = await auth();
+  const user = session?.user;
+  if (!user || user.rol !== "vendedor" || !user.sucursalId) {
+    return { error: "No autorizado." };
+  }
+
+  if (!Number.isInteger(input.cantidad) || input.cantidad <= 0 || input.cantidad > MAX_PIEZAS_LINEA) {
+    return { error: "La cantidad debe ser un número entero mayor a 0." };
+  }
+  if (!esMotivoSalida(input.motivo)) {
+    return { error: "Elige el motivo de la salida." };
+  }
+  if (typeof input.idempotencyKey !== "string" || !UUID_RE.test(input.idempotencyKey)) {
+    return { error: "Salida inválida." };
+  }
+  const nota = (input.nota ?? "").trim().slice(0, NOTA_SALIDA_MAX);
+  if (input.motivo === "otro" && !nota) {
+    return { error: "Escribe cuál es el motivo." };
+  }
+
+  const resuelto = await resolverLotePropio(input.qrToken, user.sucursalId);
+  if ("error" in resuelto) return { error: resuelto.error };
+  const lote = resuelto.lote;
+  const precio = Number(lote.precio_mxn);
+  const motivo = input.motivo;
+
+  const resultado = await withTransaction<
+    { error: string } | { stockAntes: number } | "duplicada"
+  >(async (client) => {
+    await client.query("SELECT id FROM lotes WHERE id = $1 FOR UPDATE", [lote.id]);
+
+    const { rows: yaRegistrada } = await client.query(
+      "SELECT 1 FROM movimientos_inventario WHERE idempotency_key = $1 LIMIT 1",
+      [input.idempotencyKey]
+    );
+    if (yaRegistrada.length > 0) return "duplicada";
+
+    const { rows } = await client.query<{ stock: string }>(
+      "SELECT stock FROM stock_actual WHERE lote_id = $1",
+      [lote.id]
+    );
+    const stockAntes = Number(rows[0]?.stock ?? 0);
+    if (input.cantidad > stockAntes) {
+      return { error: `Stock insuficiente: quedan ${stockAntes} piezas.` };
+    }
+
+    await client.query(
+      `INSERT INTO movimientos_inventario
+         (lote_id, sucursal_id, tipo, cantidad, usuario_id, precio_unitario_mxn, nota, idempotency_key, motivo)
+       VALUES ($1, $2, 'salida', $3, $4, $5, $6, $7, $8)`,
+      [
+        lote.id,
+        lote.sucursal_id,
+        -input.cantidad,
+        Number(user.id),
+        precio,
+        nota || null,
+        input.idempotencyKey,
+        motivo,
+      ]
+    );
+    return { stockAntes };
+  });
+
+  if (resultado === "duplicada") return { success: { cantidad: input.cantidad, motivo, precio } };
+  if ("error" in resultado) return { error: resultado.error };
+
+  try {
+    await verificarUmbralYNotificar(lote.id, resultado.stockAntes, resultado.stockAntes - input.cantidad);
+  } catch {
+    // La salida ya está confirmada: un fallo al avisar (push) no la tumba.
+  }
+
+  return { success: { cantidad: input.cantidad, motivo, precio } };
 }
 
 /**

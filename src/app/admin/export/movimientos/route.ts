@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
 import { toCsv, csvResponse } from "@/lib/csv";
+import { etiquetaMotivo } from "@/lib/motivos-salida";
 
 const TIPOS = [
   "entrada",
@@ -10,6 +11,7 @@ const TIPOS = [
   "corte",
   "traspaso_salida",
   "traspaso_entrada",
+  "salida",
 ] as const;
 
 interface MovimientoRow {
@@ -21,6 +23,7 @@ interface MovimientoRow {
   precio_unitario_mxn: string | null;
   usuario_nombre: string;
   nota: string | null;
+  motivo: string | null;
 }
 
 export async function GET(request: NextRequest) {
@@ -59,7 +62,7 @@ export async function GET(request: NextRequest) {
 
   const { rows } = await query<MovimientoRow>(
     `SELECT m.creado_en, s.nombre AS sucursal_nombre, l.nombre AS lote_nombre,
-            m.tipo, m.cantidad, m.precio_unitario_mxn, u.nombre AS usuario_nombre, m.nota
+            m.tipo, m.cantidad, m.precio_unitario_mxn, u.nombre AS usuario_nombre, m.nota, m.motivo
      FROM movimientos_inventario m
      JOIN sucursales s ON s.id = m.sucursal_id
      JOIN lotes l ON l.id = m.lote_id
@@ -70,7 +73,7 @@ export async function GET(request: NextRequest) {
   );
 
   const csv = toCsv(
-    ["Fecha", "Sucursal", "Precio", "Tipo", "Cantidad", "Precio unitario", "Usuario", "Nota"],
+    ["Fecha", "Sucursal", "Precio", "Tipo", "Cantidad", "Precio unitario", "Usuario", "Nota", "Motivo"],
     rows.map((r) => [
       new Date(r.creado_en).toLocaleString("es-MX"),
       r.sucursal_nombre,
@@ -80,6 +83,7 @@ export async function GET(request: NextRequest) {
       r.precio_unitario_mxn ?? "",
       r.usuario_nombre,
       r.nota ?? "",
+      etiquetaMotivo(r.motivo),
     ])
   );
 

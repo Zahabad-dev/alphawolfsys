@@ -30,13 +30,32 @@ export interface VentaPendienteCarrito {
   creadoEn: string;
 }
 
-export type VentaPendiente = VentaPendienteSimple | VentaPendienteCarrito;
+/** Salida que no es venta (regalo, saldo, merma…) guardada sin conexión. */
+export interface SalidaPendiente {
+  id?: number;
+  tipo: "salida";
+  qrToken: string;
+  cantidad: number;
+  motivo: string;
+  nota: string;
+  idempotencyKey: string;
+  creadoEn: string;
+}
+
+export type VentaPendiente = VentaPendienteSimple | VentaPendienteCarrito | SalidaPendiente;
 
 export function esVentaCarrito(v: VentaPendiente): v is VentaPendienteCarrito {
   return "lineas" in v;
 }
 
-type NuevaVentaPendiente = Omit<VentaPendienteSimple, "id"> | Omit<VentaPendienteCarrito, "id">;
+export function esSalida(v: VentaPendiente): v is SalidaPendiente {
+  return "tipo" in v && v.tipo === "salida";
+}
+
+type NuevaVentaPendiente =
+  | Omit<VentaPendienteSimple, "id">
+  | Omit<VentaPendienteCarrito, "id">
+  | Omit<SalidaPendiente, "id">;
 
 function abrirDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
