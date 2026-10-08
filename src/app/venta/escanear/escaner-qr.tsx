@@ -74,7 +74,10 @@ export default function EscanerQr() {
 
   return (
     <div className="flex w-full max-w-sm flex-col items-center gap-4">
-      <video ref={videoRef} className="w-full rounded-2xl border border-white/10" />
+      <video
+        ref={videoRef}
+        className="aspect-[4/3] w-full max-w-[16rem] self-center rounded-2xl border border-white/10 object-cover"
+      />
       {carrito.lineas.length > 0 && (
         <p className="text-center text-sm text-brand-cream/70">
           Escanea otro precio para agregarlo, o finaliza la venta.
