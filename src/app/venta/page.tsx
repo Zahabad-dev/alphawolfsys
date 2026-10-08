@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { query } from "@/lib/db";
 import Header from "@/components/Header";
 import Sincronizar from "./sincronizar";
+import VentaEnCurso from "./venta-en-curso";
 
 interface SucursalRow {
   nombre: string;
@@ -53,6 +54,7 @@ export default async function VentaPage() {
       />
       <main className="flex flex-1 flex-col items-center gap-6 p-6">
         <Sincronizar />
+        <VentaEnCurso />
 
         {/* Enlaces normales (no <Link>) a propósito: una transición de Next.js
             del lado del cliente pide un payload aparte que nunca queda en

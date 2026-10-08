@@ -1,8 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { registrarVentaAction, reportarVentaOfflineFallidaAction } from "./actions";
-import { guardarCatalogo, listarCola, eliminarDeCola } from "@/lib/offline-db";
+import {
+  registrarVentaAction,
+  registrarVentaCarritoAction,
+  reportarVentaOfflineFallidaAction,
+} from "./actions";
+import { guardarCatalogo, listarCola, eliminarDeCola, esVentaCarrito } from "@/lib/offline-db";
 
 export default function Sincronizar() {
   const [pendientes, setPendientes] = useState(0);
@@ -28,17 +32,41 @@ export default function Sincronizar() {
     setSincronizando(true);
     for (const venta of cola) {
       try {
-        const respuesta = await registrarVentaAction({
-          qrToken: venta.qrToken,
-          cantidad: venta.cantidad,
-          idempotencyKey: venta.idempotencyKey,
-        });
-        if (respuesta.error) {
-          await reportarVentaOfflineFallidaAction({
+        if (esVentaCarrito(venta)) {
+          // Venta de varios precios: el servidor es idempotente por ventaId.
+          const respuesta = await registrarVentaCarritoAction({
+            ventaId: venta.ventaId,
+            lineas: venta.lineas.map((l) => ({
+              qrToken: l.qrToken,
+              cantidad: l.cantidad,
+              idempotencyKey: l.idempotencyKey,
+            })),
+          });
+          if (respuesta.error) {
+            await reportarVentaOfflineFallidaAction({
+              qrToken: venta.lineas[0]?.qrToken ?? "",
+              cantidad: venta.lineas.reduce((s, l) => s + l.cantidad, 0),
+              mensaje: respuesta.error,
+              lineas: venta.lineas.map((l) => ({
+                qrToken: l.qrToken,
+                cantidad: l.cantidad,
+                precio: l.precio,
+              })),
+            });
+          }
+        } else {
+          const respuesta = await registrarVentaAction({
             qrToken: venta.qrToken,
             cantidad: venta.cantidad,
-            mensaje: respuesta.error,
+            idempotencyKey: venta.idempotencyKey,
           });
+          if (respuesta.error) {
+            await reportarVentaOfflineFallidaAction({
+              qrToken: venta.qrToken,
+              cantidad: venta.cantidad,
+              mensaje: respuesta.error,
+            });
+          }
         }
         // Éxito o rechazo definitivo: en ambos casos ya no se reintenta.
         if (venta.id !== undefined) await eliminarDeCola(venta.id);

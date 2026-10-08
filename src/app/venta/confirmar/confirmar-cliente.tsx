@@ -12,7 +12,6 @@ export default function ConfirmarCliente() {
 
   const [estado, setEstado] = useState<"cargando" | "listo" | "no-encontrado">("cargando");
   const [item, setItem] = useState<CatalogoItem | null>(null);
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
 
   useEffect(() => {
     let cancelado = false;
@@ -96,7 +95,6 @@ export default function ConfirmarCliente() {
       <main className="flex flex-1 flex-col items-center justify-center p-4">
         <ContarPiezasForm
           qrToken={token}
-          idempotencyKey={idempotencyKey}
           precio={item.precio}
           nombre={item.nombre}
           stockReferencia={item.stock}

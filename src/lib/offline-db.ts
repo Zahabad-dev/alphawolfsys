@@ -12,7 +12,8 @@ export interface CatalogoItem {
   stock: number;
 }
 
-export interface VentaPendiente {
+/** Venta de un solo precio (formato anterior; puede haber alguna pendiente en celulares sin actualizar). */
+export interface VentaPendienteSimple {
   id?: number;
   qrToken: string;
   cantidad: number;
@@ -20,6 +21,22 @@ export interface VentaPendiente {
   idempotencyKey: string;
   creadoEn: string;
 }
+
+/** Venta con varios precios guardada sin conexión. */
+export interface VentaPendienteCarrito {
+  id?: number;
+  ventaId: string;
+  lineas: { qrToken: string; cantidad: number; precio: number; idempotencyKey: string }[];
+  creadoEn: string;
+}
+
+export type VentaPendiente = VentaPendienteSimple | VentaPendienteCarrito;
+
+export function esVentaCarrito(v: VentaPendiente): v is VentaPendienteCarrito {
+  return "lineas" in v;
+}
+
+type NuevaVentaPendiente = Omit<VentaPendienteSimple, "id"> | Omit<VentaPendienteCarrito, "id">;
 
 function abrirDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -63,7 +80,7 @@ export async function buscarEnCatalogo(qrToken: string): Promise<CatalogoItem | 
   return item;
 }
 
-export async function encolarVenta(venta: Omit<VentaPendiente, "id">) {
+export async function encolarVenta(venta: NuevaVentaPendiente) {
   const db = await abrirDb();
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORE_COLA, "readwrite");

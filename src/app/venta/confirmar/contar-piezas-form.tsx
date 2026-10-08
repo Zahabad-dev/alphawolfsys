@@ -3,25 +3,31 @@
 import { useEffect, useRef, useState } from "react";
 import QrScanner from "qr-scanner";
 import { extraerToken } from "@/lib/qr-token";
-import { registrarVentaAction } from "@/app/venta/actions";
-import { encolarVenta } from "@/lib/offline-db";
+import { buscarEnCatalogo } from "@/lib/offline-db";
+import {
+  agregarAlCarrito,
+  leerCarrito,
+  quitarDelCarrito,
+  useCarrito,
+  vaciarCarrito,
+} from "@/lib/carrito";
+import { enviarVenta, type EnvioResultado } from "../enviar-venta";
+import ResumenVenta from "../resumen-venta";
+import ResultadoVenta from "../resultado-venta";
 
 const COOLDOWN_MS = 1800;
-const TIMEOUT_MS = 6000;
+/** A partir de esta cantidad en un solo precio se pide confirmar (evita 3000 en vez de 30). */
+const LIMITE_ALERTA_PIEZAS = 500;
 
-function timeout(ms: number): Promise<never> {
-  return new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), ms));
-}
+type ResultadoFinal = Extract<EnvioResultado, { tipo: "registrada" | "guardada-local" }>;
 
 export default function ContarPiezasForm({
   qrToken,
-  idempotencyKey,
   precio,
   nombre,
   stockReferencia,
 }: {
   qrToken: string;
-  idempotencyKey: string;
   precio: number;
   nombre: string;
   stockReferencia: number;
@@ -29,34 +35,52 @@ export default function ContarPiezasForm({
   const videoRef = useRef<HTMLVideoElement>(null);
   const scannerRef = useRef<QrScanner | null>(null);
   const bloqueadoRef = useRef(false);
+  const precioRef = useRef(precio);
+
+  const carrito = useCarrito();
 
   const [piezas, setPiezas] = useState(0);
   const [aviso, setAviso] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [resultado, setResultado] = useState<{ cantidad: number; total: number } | null>(null);
-  const [guardadoLocal, setGuardadoLocal] = useState(false);
+  const [resultado, setResultado] = useState<ResultadoFinal | null>(null);
+  const [confirmadoPara, setConfirmadoPara] = useState<string | null>(null);
 
   useEffect(() => {
-    if (resultado || guardadoLocal || !videoRef.current) return;
+    if (resultado || !videoRef.current) return;
+
+    async function procesarLectura(texto: string) {
+      const token = extraerToken(texto);
+      if (!token) return;
+
+      // Misma prenda: o el mismo QR, o una etiqueta de otra sucursal (ej. Almacén)
+      // que corresponde al mismo precio.
+      let mismaPrenda = token === qrToken;
+      if (!mismaPrenda) {
+        const otro = await buscarEnCatalogo(token);
+        mismaPrenda = otro !== null && otro.precio === precioRef.current;
+      }
+
+      if (!mismaPrenda) {
+        setAviso(
+          "Ese código es de otro precio. Si quieres venderlo también, toca «Agregar y escanear otro precio»."
+        );
+        return;
+      }
+
+      setAviso(null);
+      setPiezas((actual) => actual + 1);
+    }
 
     const scanner = new QrScanner(
       videoRef.current,
       (result) => {
         if (bloqueadoRef.current) return;
-
-        const token = extraerToken(result.data);
-        if (token !== qrToken) {
-          setAviso("Ese código no es esta prenda — sigue escaneando la misma.");
-          return;
-        }
-
-        setAviso(null);
-        setPiezas((actual) => actual + 1);
-
         bloqueadoRef.current = true;
-        setTimeout(() => {
-          bloqueadoRef.current = false;
-        }, COOLDOWN_MS);
+        void procesarLectura(result.data).finally(() => {
+          setTimeout(() => {
+            bloqueadoRef.current = false;
+          }, COOLDOWN_MS);
+        });
       },
       { highlightScanRegion: true, highlightCodeOutline: true }
     );
@@ -70,93 +94,85 @@ export default function ContarPiezasForm({
       scanner.stop();
       scanner.destroy();
     };
-  }, [qrToken, resultado, guardadoLocal]);
+  }, [qrToken, resultado]);
+
+  const item = { qrToken, nombre, precio, stock: stockReferencia };
+
+  const yaEnVenta = carrito.lineas.find((l) => l.precio === precio)?.cantidad ?? 0;
+  const disponible = stockReferencia - yaEnVenta;
+
+  let avisoCantidad: string | null = null;
+  if (piezas > 0 && piezas > disponible) {
+    avisoCantidad = `Según tu último inventario solo quedan ${stockReferencia} piezas de este precio${
+      yaEnVenta > 0 ? ` (ya llevas ${yaEnVenta} en esta venta)` : ""
+    }.`;
+  } else if (piezas >= LIMITE_ALERTA_PIEZAS) {
+    avisoCantidad = `Son ${piezas} piezas de un solo precio. ¿Es correcto?`;
+  }
+
+  /** Con aviso de cantidad, el primer toque solo pide confirmar; el segundo procede. */
+  function pideConfirmar(): boolean {
+    if (avisoCantidad && confirmadoPara !== avisoCantidad) {
+      setConfirmadoPara(avisoCantidad);
+      return true;
+    }
+    return false;
+  }
+  const esperandoConfirmar = avisoCantidad !== null && confirmadoPara === avisoCantidad;
+  const etiqueta = (base: string) => (esperandoConfirmar ? "Toca otra vez para confirmar" : base);
+
+  function onCambioPiezas(valor: string) {
+    const soloDigitos = valor.replace(/\D/g, "").slice(0, 6);
+    setPiezas(soloDigitos === "" ? 0 : Number(soloDigitos));
+  }
 
   function quitarUltimaPieza() {
     setPiezas((actual) => Math.max(0, actual - 1));
   }
 
-  function cancelarVenta() {
-    window.location.href = "/venta";
+  function agregarYEscanearOtro() {
+    if (pending || piezas <= 0) return;
+    if (pideConfirmar()) return;
+    agregarAlCarrito(item, piezas);
+    window.location.href = "/venta/escanear";
   }
 
   async function finalizarVenta() {
+    if (pending) return;
+    const hayConteo = piezas > 0;
+    if (!hayConteo && carrito.lineas.length === 0) return;
+    if (hayConteo && pideConfirmar()) return;
+
     setPending(true);
     setAviso(null);
 
-    if (typeof navigator !== "undefined" && navigator.onLine === false) {
-      await guardarLocal();
+    if (hayConteo) {
+      agregarAlCarrito(item, piezas);
+      setPiezas(0);
+    }
+
+    const envio = await enviarVenta(leerCarrito());
+    if (envio.tipo === "error") {
+      setAviso(`${envio.mensaje} Ajusta o quita esa línea con ✕ y vuelve a finalizar.`);
+      setPending(false);
       return;
     }
 
-    try {
-      const respuesta = await Promise.race([
-        registrarVentaAction({ qrToken, cantidad: piezas, idempotencyKey }),
-        timeout(TIMEOUT_MS),
-      ]);
-      if (respuesta.error) {
-        setAviso(respuesta.error);
-        setPending(false);
-        return;
-      }
-      if (respuesta.success) setResultado(respuesta.success);
-      setPending(false);
-    } catch {
-      await guardarLocal();
-    }
-  }
-
-  async function guardarLocal() {
-    await encolarVenta({
-      qrToken,
-      cantidad: piezas,
-      precio,
-      idempotencyKey,
-      creadoEn: new Date().toISOString(),
-    });
-    setGuardadoLocal(true);
+    vaciarCarrito();
+    setResultado(envio);
     setPending(false);
   }
 
-  const total = piezas * precio;
-
-  if (resultado) {
-    return (
-      <div className="flex flex-col items-center gap-4 rounded-2xl border border-white/10 bg-brand-gray2 p-8 text-center">
-        <p className="text-xl text-brand-gold">Venta registrada</p>
-        <p className="text-brand-cream">
-          {resultado.cantidad} piezas × ${precio.toFixed(2)} = ${resultado.total.toFixed(2)}
-        </p>
-        <a
-          href="/venta/escanear"
-          className="mt-2 rounded-full bg-brand-gold px-6 py-2 font-semibold text-brand-black"
-        >
-          Nueva venta
-        </a>
-      </div>
-    );
+  function cancelarVenta() {
+    const hayAlgo = piezas > 0 || carrito.lineas.length > 0;
+    if (hayAlgo && !window.confirm("¿Cancelar toda la venta? Se pierde lo que llevas.")) return;
+    vaciarCarrito();
+    window.location.href = "/venta";
   }
 
-  if (guardadoLocal) {
-    return (
-      <div className="flex flex-col items-center gap-4 rounded-2xl border border-yellow-500/40 bg-yellow-500/10 p-8 text-center">
-        <p className="text-xl text-yellow-500">Guardada en el celular</p>
-        <p className="text-brand-cream">
-          {piezas} piezas × ${precio.toFixed(2)} = ${total.toFixed(2)}
-        </p>
-        <p className="text-sm text-brand-cream/70">
-          Sin señal ahora mismo — se va a sincronizar sola en cuanto haya conexión, no hace falta
-          que hagas nada más.
-        </p>
-        <a
-          href="/venta/escanear"
-          className="mt-2 rounded-full bg-brand-gold px-6 py-2 font-semibold text-brand-black"
-        >
-          Nueva venta
-        </a>
-      </div>
-    );
-  }
+  if (resultado) return <ResultadoVenta resultado={resultado} />;
+
+  const sinNada = piezas === 0 && carrito.lineas.length === 0;
 
   return (
     <div className="flex w-full max-w-sm flex-col gap-4">
@@ -165,14 +181,33 @@ export default function ContarPiezasForm({
       <div className="rounded-2xl border border-white/10 bg-brand-gray2 p-4 text-center">
         <p className="text-2xl font-semibold text-brand-gold">${precio.toFixed(2)} MXN</p>
         <p className="text-xs text-brand-cream/50">{nombre}</p>
-        <p className="mt-2 text-4xl font-bold text-brand-cream">{piezas}</p>
-        <p className="text-sm text-brand-cream/70">piezas contadas</p>
-        <p className="mt-2 text-brand-cream">Total: ${total.toFixed(2)}</p>
-        <p className="text-xs text-brand-cream/50">
+
+        <input
+          aria-label="Piezas de este precio"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          placeholder="0"
+          value={piezas === 0 ? "" : String(piezas)}
+          onChange={(e) => onCambioPiezas(e.target.value)}
+          className="mt-2 w-full rounded-lg bg-transparent text-center text-4xl font-bold text-brand-cream outline-none placeholder:text-brand-cream/30 focus:bg-brand-black/40"
+        />
+        <p className="text-sm text-brand-cream/70">piezas · escanea cada una o escribe el total</p>
+        <p className="mt-2 text-xs text-brand-cream/50">
           Último stock conocido: {stockReferencia} (puede no estar al día)
         </p>
       </div>
 
+      <ResumenVenta
+        lineas={carrito.lineas}
+        pendiente={{ precio, cantidad: piezas }}
+        onQuitar={quitarDelCarrito}
+      />
+
+      {avisoCantidad && (
+        <p className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-500">
+          ⚠ {avisoCantidad}
+        </p>
+      )}
       {aviso && <p className="text-sm text-brand-red">{aviso}</p>}
 
       <div className="flex gap-3">
@@ -196,11 +231,20 @@ export default function ContarPiezasForm({
 
       <button
         type="button"
-        onClick={finalizarVenta}
+        onClick={agregarYEscanearOtro}
         disabled={pending || piezas === 0}
+        className="rounded-full border border-brand-gold px-6 py-2.5 text-sm font-semibold text-brand-gold disabled:opacity-40"
+      >
+        {etiqueta("Agregar y escanear otro precio")}
+      </button>
+
+      <button
+        type="button"
+        onClick={finalizarVenta}
+        disabled={pending || sinNada}
         className="rounded-full bg-brand-gold px-6 py-3 font-semibold text-brand-black transition-opacity disabled:opacity-40"
       >
-        {pending ? "Registrando..." : "Finalizar venta"}
+        {pending ? "Registrando..." : etiqueta("Finalizar venta")}
       </button>
     </div>
   );
