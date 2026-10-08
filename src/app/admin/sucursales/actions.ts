@@ -12,13 +12,6 @@ async function requireStaff() {
   }
 }
 
-async function requireAdmin() {
-  const session = await auth();
-  if (!session || session.user.rol !== "admin") {
-    throw new Error("No autorizado");
-  }
-}
-
 export interface ActualizarSucursalResult {
   error?: string;
   success?: string;
@@ -60,7 +53,10 @@ export async function crearSucursalAction(
   _prevState: CrearSucursalResult | undefined,
   formData: FormData
 ): Promise<CrearSucursalResult> {
-  await requireAdmin();
+  const sesion = await auth();
+  if (!sesion || sesion.user.rol !== "admin") {
+    return { error: "Solo un administrador puede crear sucursales." };
+  }
 
   const clave = formData.get("clave");
   const nombre = formData.get("nombre");

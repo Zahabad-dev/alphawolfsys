@@ -5,14 +5,6 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
 
-async function requireAdmin() {
-  const session = await auth();
-  if (!session || session.user.rol !== "admin") {
-    throw new Error("No autorizado");
-  }
-  return session;
-}
-
 async function requireStaff() {
   const session = await auth();
   if (!session || session.user.rol === "vendedor") {
@@ -30,7 +22,10 @@ export async function crearVendedorAction(
   _prevState: CrearVendedorResult | undefined,
   formData: FormData
 ): Promise<CrearVendedorResult> {
-  await requireAdmin();
+  const sesion = await auth();
+  if (!sesion || sesion.user.rol !== "admin") {
+    return { error: "Solo un administrador puede crear usuarios." };
+  }
 
   const username = formData.get("username");
   const nombre = formData.get("nombre");
@@ -106,7 +101,10 @@ export async function cambiarPasswordVendedorAction(
   _prevState: CambiarPasswordResult | undefined,
   formData: FormData
 ): Promise<CambiarPasswordResult> {
-  await requireAdmin();
+  const sesion = await auth();
+  if (!sesion || sesion.user.rol !== "admin") {
+    return { error: "Solo un administrador puede cambiar contraseñas." };
+  }
 
   const id = Number(formData.get("id"));
   const password = formData.get("password");
@@ -142,7 +140,10 @@ export async function eliminarVendedorAction(
   _prevState: EliminarVendedorResult | undefined,
   formData: FormData
 ): Promise<EliminarVendedorResult> {
-  const session = await requireAdmin();
+  const session = await auth();
+  if (!session || session.user.rol !== "admin") {
+    return { error: "Solo un administrador puede eliminar usuarios." };
+  }
 
   const id = Number(formData.get("id"));
   const usernameConfirmacion = formData.get("username_confirmacion");

@@ -25,6 +25,8 @@ interface VendedorRow {
 export default async function AdminSucursalesPage() {
   const session = await auth();
   if (!session || session.user.rol === "vendedor") redirect("/login");
+  // Solo el administrador crea/elimina; el gerente no debe ver botones que no puede usar.
+  const esAdmin = session.user.rol === "admin";
 
   const [{ rows: sucursales }, { rows: vendedores }] = await Promise.all([
     query<SucursalRow>("SELECT id, clave, nombre, estado, tipo, activa FROM sucursales ORDER BY tipo, nombre"),
@@ -45,7 +47,7 @@ export default async function AdminSucursalesPage() {
       <Header titulo="Sucursales" subtitulo="Gestión de sucursales y almacén" />
       <AdminNav />
       <main className="flex flex-1 flex-col gap-4 p-4 sm:p-6">
-        <NuevaSucursalForm />
+        {esAdmin && <NuevaSucursalForm />}
 
         {sucursales.map((s) => (
           <div
@@ -75,7 +77,7 @@ export default async function AdminSucursalesPage() {
                     {s.activa ? "Desactivar" : "Activar"}
                   </button>
                 </form>
-                {s.tipo !== "almacen" && (
+                {esAdmin && s.tipo !== "almacen" && (
                   <EliminarSucursalForm
                     id={s.id}
                     nombre={s.nombre}

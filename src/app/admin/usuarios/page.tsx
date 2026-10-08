@@ -28,6 +28,8 @@ interface SucursalRow {
 export default async function AdminUsuariosPage() {
   const session = await auth();
   if (!session || session.user.rol === "vendedor") redirect("/login");
+  // Solo el administrador crea/elimina; el gerente no debe ver botones que no puede usar.
+  const esAdmin = session.user.rol === "admin";
 
   const [{ rows: usuarios }, { rows: sucursales }] = await Promise.all([
     query<UsuarioRow>(
@@ -44,7 +46,7 @@ export default async function AdminUsuariosPage() {
       <Header titulo="Vendedores" subtitulo="Gestión de usuarios" />
       <AdminNav />
       <main className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
-        <NuevoVendedorForm sucursales={sucursales} />
+        {esAdmin && <NuevoVendedorForm sucursales={sucursales} />}
 
         <div className="overflow-x-auto rounded-2xl border border-white/10">
           <table className="w-full text-left text-sm">
@@ -96,8 +98,8 @@ export default async function AdminUsuariosPage() {
                               {u.activo ? "Desactivar" : "Activar"}
                             </button>
                           </form>
-                          <CambiarPasswordForm id={u.id} username={u.username} />
-                          <EliminarVendedorForm id={u.id} username={u.username} />
+                          {esAdmin && <CambiarPasswordForm id={u.id} username={u.username} />}
+                          {esAdmin && <EliminarVendedorForm id={u.id} username={u.username} />}
                         </div>
                       </div>
                     )}

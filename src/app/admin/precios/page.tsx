@@ -28,6 +28,8 @@ interface SucursalRow {
 export default async function AdminPreciosPage() {
   const session = await auth();
   if (!session || session.user.rol === "vendedor") redirect("/login");
+  // Solo el administrador crea/elimina; el gerente no debe ver botones que no puede usar.
+  const esAdmin = session.user.rol === "admin";
 
   const [{ rows: precios }, { rows: sucursales }] = await Promise.all([
     query<PrecioRow>(
@@ -65,7 +67,7 @@ export default async function AdminPreciosPage() {
       <Header titulo="Precios" subtitulo="El Almacén es el catálogo — de ahí se asignan a cada sucursal" />
       <AdminNav />
       <main className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
-        <NuevoPrecioForm />
+        {esAdmin && <NuevoPrecioForm />}
 
         {preciosAlmacen.length === 0 ? (
           <p className="rounded-2xl border border-white/10 bg-brand-gray2 p-4 text-sm text-brand-cream/70">
@@ -147,7 +149,7 @@ export default async function AdminPreciosPage() {
                           </form>
                         </td>
                         <td className="px-4 py-2">
-                          <EliminarPrecioForm id={p.id} />
+                          {esAdmin && <EliminarPrecioForm id={p.id} />}
                         </td>
                       </tr>
                     ))}

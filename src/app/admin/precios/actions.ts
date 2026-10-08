@@ -5,13 +5,6 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
 
-async function requireAdmin() {
-  const session = await auth();
-  if (!session || session.user.rol !== "admin") {
-    throw new Error("No autorizado");
-  }
-}
-
 async function requireStaff() {
   const session = await auth();
   if (!session || session.user.rol === "vendedor") {
@@ -31,7 +24,10 @@ export async function crearPrecioAction(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
-  await requireAdmin();
+  const sesion = await auth();
+  if (!sesion || sesion.user.rol !== "admin") {
+    return { error: "Solo un administrador puede agregar precios al Almacén." };
+  }
 
   const precio = formData.get("precio_mxn");
   const precioNum = Number(precio);
