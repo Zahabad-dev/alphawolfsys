@@ -12,6 +12,7 @@ import {
 } from "@/lib/motivos-salida";
 import { dinero } from "@/lib/carrito";
 import { enviarSalida } from "../enviar-salida";
+import CamaraQr from "../camara-qr";
 
 // Misma detección que el conteo de ventas: hay que ver varios frames SIN QR antes
 // de aceptar la siguiente pieza (evita contar doble si la prenda se queda en cuadro).
@@ -220,10 +221,7 @@ export default function SalidaForm() {
 
   return (
     <div className="flex w-full max-w-sm flex-col gap-4">
-      <video
-        ref={videoRef}
-        className="aspect-[4/3] w-full max-w-[16rem] self-center rounded-2xl border border-white/10 object-cover"
-      />
+      <CamaraQr videoRef={videoRef} />
 
       {!item ? (
         <p className="rounded-2xl border border-white/10 bg-brand-gray2 p-4 text-center text-sm text-brand-cream/70">

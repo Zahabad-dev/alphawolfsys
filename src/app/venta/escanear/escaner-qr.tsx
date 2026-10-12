@@ -6,6 +6,7 @@ import { extraerToken } from "@/lib/qr-token";
 import { leerCarrito, quitarDelCarrito, useCarrito, vaciarCarrito } from "@/lib/carrito";
 import { enviarVenta, type EnvioResultado } from "../enviar-venta";
 import ResumenVenta from "../resumen-venta";
+import CamaraQr from "../camara-qr";
 import ResultadoVenta from "../resultado-venta";
 
 type ResultadoFinal = Extract<EnvioResultado, { tipo: "registrada" | "guardada-local" }>;
@@ -74,10 +75,7 @@ export default function EscanerQr() {
 
   return (
     <div className="flex w-full max-w-sm flex-col items-center gap-4">
-      <video
-        ref={videoRef}
-        className="aspect-[4/3] w-full max-w-[16rem] self-center rounded-2xl border border-white/10 object-cover"
-      />
+      <CamaraQr videoRef={videoRef} />
       {carrito.lineas.length > 0 && (
         <p className="text-center text-sm text-brand-cream/70">
           Escanea otro precio para agregarlo, o finaliza la venta.

@@ -13,6 +13,7 @@ import {
 } from "@/lib/carrito";
 import { enviarVenta, type EnvioResultado } from "../enviar-venta";
 import ResumenVenta from "../resumen-venta";
+import CamaraQr from "../camara-qr";
 import ResultadoVenta from "../resultado-venta";
 
 // En vez de un temporizador fijo entre conteos, se exige que la cámara
@@ -201,10 +202,7 @@ export default function ContarPiezasForm({
 
   return (
     <div className="flex w-full max-w-sm flex-col gap-4">
-      <video
-        ref={videoRef}
-        className="aspect-[4/3] w-full max-w-[16rem] self-center rounded-2xl border border-white/10 object-cover"
-      />
+      <CamaraQr videoRef={videoRef} />
 
       <div className="rounded-2xl border border-white/10 bg-brand-gray2 p-4 text-center">
         <p className="text-2xl font-semibold text-brand-gold">${precio.toFixed(2)} MXN</p>

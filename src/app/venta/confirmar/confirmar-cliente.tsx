@@ -92,7 +92,7 @@ export default function ConfirmarCliente() {
   return (
     <div className="flex min-h-screen flex-col">
       <Header titulo="Confirmar venta" />
-      <main className="flex flex-1 flex-col items-center justify-center p-4">
+      <main className="flex flex-1 flex-col items-center justify-start p-4">
         <ContarPiezasForm
           qrToken={token}
           precio={item.precio}
