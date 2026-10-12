@@ -1,7 +1,7 @@
 // Las ventas ahora sí soportan cola offline (ver src/lib/offline-db.ts) — el
 // vendedor cuenta y guarda local si no hay señal, se sincroniza sola después.
 // Aquí solo nos aseguramos de que la app misma (el "shell") cargue sin señal.
-const CACHE_NAME = "wd-inventario-v6";
+const CACHE_NAME = "wd-inventario-v7";
 const ESTATICOS_PREFIX = ["/_next/static/", "/icons/"];
 
 // Pantallas principales de cada rol que se precargan apenas se instala el
@@ -19,7 +19,6 @@ const PRECARGA_URLS = [
   "/venta",
   "/venta/escanear",
   "/venta/confirmar",
-  "/venta/salida",
   "/inventario",
   "/admin/dashboard",
   "/admin/precios",

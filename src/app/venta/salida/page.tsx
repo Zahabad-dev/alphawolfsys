@@ -2,8 +2,11 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import Header from "@/components/Header";
 import SalidaForm from "./salida-form";
+import { SALIDAS_HABILITADAS } from "@/lib/funciones";
 
 export default async function SalidaPage() {
+  if (!SALIDAS_HABILITADAS) redirect("/venta");
+
   const session = await auth();
   if (session?.user.rol !== "vendedor") redirect("/venta");
 

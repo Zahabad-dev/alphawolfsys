@@ -14,6 +14,7 @@ import {
   esSalida,
   esVentaCarrito,
 } from "@/lib/offline-db";
+import { SALIDAS_HABILITADAS } from "@/lib/funciones";
 
 export default function Sincronizar() {
   const [pendientes, setPendientes] = useState(0);
@@ -38,6 +39,8 @@ export default function Sincronizar() {
 
     setSincronizando(true);
     for (const venta of cola) {
+      // Salidas deshabilitadas: se conservan en la cola (no se envían ni se descartan) hasta reactivarlas.
+      if (esSalida(venta) && !SALIDAS_HABILITADAS) continue;
       try {
         if (esSalida(venta)) {
           // Salida que no es venta (muestra, saldo…): el servidor es idempotente por idempotencyKey.

@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { query, withTransaction } from "@/lib/db";
 import { verificarUmbralYNotificar } from "@/lib/push";
 import { esMotivoSalida, NOTA_SALIDA_MAX, type MotivoSalida } from "@/lib/motivos-salida";
+import { SALIDAS_HABILITADAS } from "@/lib/funciones";
 
 interface LoteRow {
   id: number;
@@ -270,6 +271,10 @@ export async function registrarSalidaAction(input: {
   nota?: string;
   idempotencyKey: string;
 }): Promise<RegistrarSalidaResult> {
+  if (!SALIDAS_HABILITADAS) {
+    return { error: "Las salidas están deshabilitadas por el momento." };
+  }
+
   const session = await auth();
   const user = session?.user;
   if (!user || user.rol !== "vendedor" || !user.sucursalId) {

@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import Sincronizar from "./sincronizar";
 import VentaEnCurso from "./venta-en-curso";
 import { etiquetaMotivo } from "@/lib/motivos-salida";
+import { SALIDAS_HABILITADAS } from "@/lib/funciones";
 
 interface SucursalRow {
   nombre: string;
@@ -54,7 +55,10 @@ export default async function VentaPage() {
     [user.sucursalId]
   );
 
-  const { rows: salidasHoy } = await query<SalidaHoyRow>(
+  // Con las salidas deshabilitadas no se consulta nada.
+  const salidasHoy: SalidaHoyRow[] = !SALIDAS_HABILITADAS
+    ? []
+    : (await query<SalidaHoyRow>(
     `SELECT l.nombre AS lote_nombre, -m.cantidad AS cantidad, m.motivo,
             to_char(m.creado_en, 'HH24:MI') AS hora
      FROM movimientos_inventario m
@@ -63,7 +67,7 @@ export default async function VentaPage() {
      ORDER BY m.creado_en DESC
      LIMIT 20`,
     [user.sucursalId]
-  );
+  )).rows;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -88,6 +92,7 @@ export default async function VentaPage() {
 
         {/* Salidas que no son venta: muestras, saldos, merma. Enlace normal
             (no <Link>) por la misma razón que el resto del flujo de venta. */}
+        {SALIDAS_HABILITADAS && (
         <a
           href="/venta/salida"
           className="w-full max-w-sm rounded-2xl border border-brand-gold/60 py-4 text-center text-xl font-semibold text-brand-gold"
@@ -97,6 +102,7 @@ export default async function VentaPage() {
             Muestra, saldo, merma…
           </span>
         </a>
+        )}
 
         <a
           href="/inventario"
