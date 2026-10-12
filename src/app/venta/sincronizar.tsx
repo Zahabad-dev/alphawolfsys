@@ -40,7 +40,7 @@ export default function Sincronizar() {
     for (const venta of cola) {
       try {
         if (esSalida(venta)) {
-          // Salida que no es venta (regalo, saldo…): el servidor es idempotente por idempotencyKey.
+          // Salida que no es venta (muestra, saldo…): el servidor es idempotente por idempotencyKey.
           const respuesta = await registrarSalidaAction({
             qrToken: venta.qrToken,
             cantidad: venta.cantidad,

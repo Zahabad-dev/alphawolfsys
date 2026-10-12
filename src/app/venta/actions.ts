@@ -257,7 +257,7 @@ export interface RegistrarSalidaResult {
 }
 
 /**
- * Registra una SALIDA que no es venta (regalo, saldo, merma, muestra, otro): la
+ * Registra una SALIDA que no es venta (muestra, saldo, merma, otro): la
  * prenda sale del inventario de la sucursal del vendedor con su motivo, para que
  * no siga contando como existencia. Mismo cuidado que la venta: bloquea el lote
  * (sin stock negativo por carrera), es idempotente por idempotency_key y acepta

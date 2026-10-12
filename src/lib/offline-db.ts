@@ -30,7 +30,7 @@ export interface VentaPendienteCarrito {
   creadoEn: string;
 }
 
-/** Salida que no es venta (regalo, saldo, merma…) guardada sin conexión. */
+/** Salida que no es venta (muestra, saldo, merma…) guardada sin conexión. */
 export interface SalidaPendiente {
   id?: number;
   tipo: "salida";

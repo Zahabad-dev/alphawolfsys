@@ -86,7 +86,7 @@ export default async function VentaPage() {
           Escanear lote
         </a>
 
-        {/* Salidas que no son venta: regalos, saldos, merma, muestras. Enlace normal
+        {/* Salidas que no son venta: muestras, saldos, merma. Enlace normal
             (no <Link>) por la misma razón que el resto del flujo de venta. */}
         <a
           href="/venta/salida"
@@ -94,7 +94,7 @@ export default async function VentaPage() {
         >
           Escanear salida
           <span className="mt-0.5 block text-xs font-normal text-brand-cream/60">
-            Regalo, saldo, merma, muestra…
+            Muestra, saldo, merma…
           </span>
         </a>
 

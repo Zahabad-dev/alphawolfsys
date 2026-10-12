@@ -3,10 +3,9 @@
  * Los valores deben coincidir con el CHECK de sql/011_salidas.sql.
  */
 export const MOTIVOS_SALIDA = [
-  { valor: "regalo", etiqueta: "Regalo", ayuda: "Obsequio a un cliente" },
+  { valor: "muestra", etiqueta: "Muestra", ayuda: "Muestra para un cliente o prospecto" },
   { valor: "saldo", etiqueta: "Saldo", ayuda: "Se manda a saldos o liquidación" },
   { valor: "merma", etiqueta: "Dañada o merma", ayuda: "Prenda dañada, manchada o defectuosa" },
-  { valor: "muestra", etiqueta: "Muestra", ayuda: "Muestra para un cliente o prospecto" },
   { valor: "otro", etiqueta: "Otro", ayuda: "Otro motivo (escribe cuál)" },
 ] as const;
 
@@ -17,7 +16,10 @@ export function esMotivoSalida(valor: unknown): valor is MotivoSalida {
 }
 
 export function etiquetaMotivo(valor: string | null | undefined): string {
-  return MOTIVOS_SALIDA.find((m) => m.valor === valor)?.etiqueta ?? "";
+  const conocido = MOTIVOS_SALIDA.find((m) => m.valor === valor)?.etiqueta;
+  if (conocido) return conocido;
+  // Valor que ya no está en la lista (p. ej. un motivo retirado): se muestra tal cual, no en blanco.
+  return valor ? valor.charAt(0).toUpperCase() + valor.slice(1) : "";
 }
 
 /** Largo máximo de la nota de una salida. */

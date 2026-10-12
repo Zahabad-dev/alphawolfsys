@@ -9,7 +9,7 @@ export default async function SalidaPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header titulo="Registrar salida" subtitulo="Regalo, saldo, merma, muestra…" />
+      <Header titulo="Registrar salida" subtitulo="Muestra, saldo, merma…" />
       <main className="flex flex-1 flex-col items-center gap-4 p-4">
         <a
           href="/venta"
