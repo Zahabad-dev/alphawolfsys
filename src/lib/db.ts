@@ -1,10 +1,16 @@
 import { Pool, type PoolClient } from "pg";
+import { ZONA_HORARIA } from "@/lib/fechas";
 
 let pool: Pool | undefined;
 
 export function getPool() {
   if (!pool) {
-    pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      // La sesión trabaja en hora de México: así "hoy", la semana, el mes, las horas
+      // que formatea SQL y los filtros por fecha cuentan el día de México, no el de UTC.
+      options: `-c timezone=${ZONA_HORARIA}`,
+    });
   }
   return pool;
 }

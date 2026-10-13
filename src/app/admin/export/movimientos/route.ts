@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { query } from "@/lib/db";
 import { toCsv, csvResponse } from "@/lib/csv";
 import { etiquetaMotivo } from "@/lib/motivos-salida";
+import { formatearFechaHora } from "@/lib/fechas";
 
 const TIPOS = [
   "entrada",
@@ -75,7 +76,7 @@ export async function GET(request: NextRequest) {
   const csv = toCsv(
     ["Fecha", "Sucursal", "Precio", "Tipo", "Cantidad", "Precio unitario", "Usuario", "Nota", "Motivo"],
     rows.map((r) => [
-      new Date(r.creado_en).toLocaleString("es-MX"),
+      formatearFechaHora(r.creado_en),
       r.sucursal_nombre,
       r.lote_nombre,
       r.tipo,

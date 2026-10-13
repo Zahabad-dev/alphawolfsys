@@ -4,6 +4,7 @@ import { query } from "@/lib/db";
 import Header from "@/components/Header";
 import AdminNav from "@/components/AdminNav";
 import { etiquetaMotivo } from "@/lib/motivos-salida";
+import { formatearFechaHora } from "@/lib/fechas";
 
 interface SucursalRow {
   id: number;
@@ -177,7 +178,7 @@ export default async function AdminHistorialPage({
               {movimientos.map((m) => (
                 <tr key={m.id} className="border-t border-white/10">
                   <td className="px-4 py-2 whitespace-nowrap font-semibold text-brand-gold">
-                    {new Date(m.creado_en).toLocaleString("es-MX")}
+                    {formatearFechaHora(m.creado_en)}
                   </td>
                   <td className="px-4 py-2">{m.sucursal_nombre}</td>
                   <td className="px-4 py-2">{m.lote_nombre}</td>

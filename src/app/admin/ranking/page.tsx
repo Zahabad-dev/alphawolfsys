@@ -3,21 +3,13 @@ import { auth } from "@/auth";
 import { query } from "@/lib/db";
 import Header from "@/components/Header";
 import AdminNav from "@/components/AdminNav";
+import { hoyISO, primerDiaDelMes } from "@/lib/fechas";
 
 interface RankingRow {
   vendedor_nombre: string;
   sucursal_nombre: string;
   piezas: number;
   total: string;
-}
-
-function primerDiaDelMes() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-}
-
-function hoyISO() {
-  return new Date().toISOString().slice(0, 10);
 }
 
 export default async function AdminRankingPage({

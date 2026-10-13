@@ -4,6 +4,7 @@ import { query } from "@/lib/db";
 import Header from "@/components/Header";
 import AdminNav from "@/components/AdminNav";
 import { marcarResueltoAction } from "./actions";
+import { formatearFechaHora } from "@/lib/fechas";
 
 interface ErrorRow {
   id: number;
@@ -67,7 +68,7 @@ export default async function SoportePage({
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs text-brand-cream/50">
-                    {new Date(e.creado_en).toLocaleString("es-MX")} · {e.origen}
+                    {formatearFechaHora(e.creado_en)} · {e.origen}
                     {e.workflow ? ` · ${e.workflow}` : ""}
                   </p>
                   <p className="mt-1 text-brand-cream">{e.mensaje}</p>

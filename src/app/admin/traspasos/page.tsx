@@ -4,6 +4,7 @@ import { query } from "@/lib/db";
 import Header from "@/components/Header";
 import AdminNav from "@/components/AdminNav";
 import TraspasoForm from "./traspaso-form";
+import { formatearFechaHora } from "@/lib/fechas";
 
 interface StockRow {
   lote_id: number;
@@ -93,7 +94,7 @@ export default async function AdminTraspasosPage() {
               {recientes.map((r) => (
                 <tr key={r.id} className="border-t border-white/10">
                   <td className="px-4 py-2 whitespace-nowrap font-semibold text-brand-gold">
-                    {new Date(r.creado_en).toLocaleString("es-MX")}
+                    {formatearFechaHora(r.creado_en)}
                   </td>
                   <td className="px-4 py-2">
                     {r.tipo === "traspaso_salida" ? (
