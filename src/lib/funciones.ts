@@ -14,9 +14,11 @@
 export const SALIDAS_HABILITADAS = false;
 
 /**
- * Dinero en el Inventario (valor de las existencias a precio de lista).
- * Con `true`, el valor lo ve ÚNICAMENTE el administrador (gerente y demás roles nunca: el panel
- * puede estar abierto en una tablet o equipo compartido). Con `false`, el Inventario muestra
- * solo piezas para todos, incluido el administrador.
+ * Dinero en el Inventario (valor de las existencias a precio de lista, totales por lugar y
+ * total general). Deshabilitado por decisión del dueño: el Inventario muestra SOLO PIEZAS, para
+ * todos los roles, incluido el administrador. (El precio de cada prenda, p. ej. $140, sigue
+ * visible porque identifica el lote.)
+ * Con `true` el valor lo vería ÚNICAMENTE el administrador (gerente y demás roles nunca).
+ * Para reactivarlo: cambiar a `true` y desplegar.
  */
-export const INVENTARIO_MUESTRA_DINERO = true;
+export const INVENTARIO_MUESTRA_DINERO = false;
