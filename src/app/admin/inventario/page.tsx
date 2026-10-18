@@ -8,6 +8,7 @@ import Header from "@/components/Header";
 import AdminNav from "@/components/AdminNav";
 import EntradaForm from "./entrada-form";
 import UmbralForm from "./umbral-form";
+import AjusteForm from "./ajuste-form";
 
 interface StockRow {
   lote_id: number;
@@ -91,6 +92,9 @@ export default async function AdminInventarioPage({
     ? parametro(sp, "estado")
     : "";
   const q = parametro(sp, "q").trim();
+  // Botón "Ajustar" de un renglón: abre el formulario de ajuste con ese lugar y precio elegidos.
+  const ajustarSel = Number(parametro(sp, "ajustar")) || 0;
+  const puedeAjustar = esAdmin(session.user.rol);
 
   const { rows: crudas } = await query<StockRow>(
     `SELECT sa.lote_id, sa.nombre, sa.precio_mxn, sa.stock, l.activo, l.umbral_stock,
@@ -175,6 +179,20 @@ export default async function AdminInventarioPage({
     const s = p.toString();
     return s ? `/admin/inventario?${s}` : "/admin/inventario";
   };
+
+  const hrefAjustar = (loteId: number) => {
+    const p = new URLSearchParams();
+    if (sucursalSel) p.set("sucursal", String(sucursalSel));
+    if (estadoSel) p.set("estado", estadoSel);
+    if (q) p.set("q", q);
+    p.set("ajustar", String(loteId));
+    return `/admin/inventario?${p.toString()}#ajuste`;
+  };
+
+  const lotesAjuste = rows.map((r) => ({
+    id: r.lote_id,
+    etiqueta: `${r.sucursal_nombre} — ${dinero(Number(r.precio_mxn))} (stock ${miles(r.stock)})`,
+  }));
 
   const lotesParaForm = rows.map((r) => ({
     id: r.lote_id,
@@ -298,6 +316,14 @@ export default async function AdminInventarioPage({
               <EntradaForm lotes={lotesParaForm} />
             </div>
           </details>
+
+          {puedeAjustar && (
+            <AjusteForm
+              key={ajustarSel}
+              lotes={lotesAjuste}
+              loteInicial={ajustarSel || undefined}
+            />
+          )}
         </section>
 
         {/* Detalle por lugar */}
@@ -348,6 +374,7 @@ export default async function AdminInventarioPage({
                         {verDinero && <th className="px-4 py-2">Valor</th>}
                         <th className="px-4 py-2">Estado</th>
                         <th className="px-4 py-2">Mínimo (alerta)</th>
+                        {puedeAjustar && <th className="px-4 py-2">Ajuste</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -379,6 +406,16 @@ export default async function AdminInventarioPage({
                           <td className="px-4 py-2">
                             <UmbralForm id={f.loteId} umbralActual={f.umbral} />
                           </td>
+                          {puedeAjustar && (
+                            <td className="px-4 py-2">
+                              <a
+                                href={hrefAjustar(f.loteId)}
+                                className="text-sm text-brand-cream/70 underline hover:text-brand-gold"
+                              >
+                                Ajustar
+                              </a>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -395,7 +432,7 @@ export default async function AdminInventarioPage({
                             {dinero(filas.reduce((s, f) => s + f.valor, 0))}
                           </td>
                         )}
-                        <td colSpan={2} />
+                        <td colSpan={puedeAjustar ? 3 : 2} />
                       </tr>
                     </tfoot>
                   </table>

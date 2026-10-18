@@ -1,11 +1,9 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
-import { esAdmin } from "@/lib/permisos";
 import Header from "@/components/Header";
 import AdminNav from "@/components/AdminNav";
 import CorteForm from "./corte-form";
-import AjusteForm from "./ajuste-form";
 
 interface StockRow {
   lote_id: number;
@@ -45,10 +43,6 @@ export default async function AdminCortePage() {
           </p>
         ) : (
           <CorteForm lotes={preciosParaForm} />
-        )}
-
-        {esAdmin(session.user.rol) && preciosParaForm.length > 0 && (
-          <AjusteForm lotes={preciosParaForm} />
         )}
 
         <div className="overflow-x-auto rounded-2xl border border-white/10">

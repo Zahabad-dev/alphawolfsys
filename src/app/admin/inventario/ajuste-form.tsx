@@ -5,8 +5,11 @@ import { registrarAjusteAction, type RegistrarAjusteResult } from "./actions";
 
 export default function AjusteForm({
   lotes,
+  loteInicial,
 }: {
   lotes: { id: number; etiqueta: string }[];
+  /** Si viene (botón "Ajustar" de un renglón), el formulario se abre con ese lugar y precio elegidos. */
+  loteInicial?: number;
 }) {
   const [state, formAction, pending] = useActionState<RegistrarAjusteResult | undefined, FormData>(
     registrarAjusteAction,
@@ -14,17 +17,27 @@ export default function AjusteForm({
   );
 
   return (
-    <details className="rounded-2xl border border-white/10 bg-brand-gray2 p-4">
-      <summary className="cursor-pointer text-sm font-semibold text-brand-cream/80">
+    <details
+      id="ajuste"
+      open={loteInicial ? true : undefined}
+      className="rounded-xl border border-white/10 bg-brand-black/40 px-3 py-2"
+    >
+      <summary className="cursor-pointer text-sm text-brand-cream/80">
         Ajustar stock (corrección — solo administración)
       </summary>
 
-      <form action={formAction} className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+      <p className="mt-3 text-xs text-brand-cream/60">
+        Resta o suma piezas del lugar y precio que elijas. Queda registrado a tu nombre, con la nota
+        y con tu contraseña.
+      </p>
+
+      <form action={formAction} className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
         <label className="flex flex-1 flex-col gap-1 text-sm text-brand-cream/80">
-          Precio (Almacén)
+          Lugar y precio
           <select
             name="lote_id"
             required
+            defaultValue={loteInicial ?? ""}
             className="rounded-lg border border-white/10 bg-brand-black px-3 py-2 text-brand-cream outline-none focus:border-brand-gold"
           >
             <option value="">Selecciona...</option>
@@ -67,7 +80,7 @@ export default function AjusteForm({
             name="nota"
             type="text"
             required
-            placeholder="ej. corte mal capturado, merma de tela"
+            placeholder="ej. 194 eran de $160, ya registradas · autorizó [nombre] por WhatsApp"
             className="rounded-lg border border-white/10 bg-brand-black px-3 py-2 text-brand-cream outline-none focus:border-brand-gold"
           />
         </label>
