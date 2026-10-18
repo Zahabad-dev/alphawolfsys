@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
-import { puedeGestionar } from "@/lib/permisos";
+import bcrypt from "bcryptjs";
+import { esAdmin } from "@/lib/permisos";
 import { query } from "@/lib/db";
 import { verificarUmbralYNotificar } from "@/lib/push";
 
@@ -57,16 +58,17 @@ export interface RegistrarAjusteResult {
 }
 
 /**
- * Corrige el stock del Almacén (merma, error de captura, etc.). Solo admin —
- * a diferencia del corte, un ajuste puede restar piezas; por eso exige nota
- * obligatoria y queda registrado quién lo hizo. Administrador y gerente pueden.
+ * Corrige el stock del Almacén (merma, error de captura, etc.). Solo administración
+ * (administrador o soporte): a diferencia del corte, un ajuste puede restar piezas; por eso
+ * exige nota obligatoria, la contraseña de quien lo hace (aunque ya tenga la sesión abierta,
+ * por si la pantalla se queda abierta en una tablet) y queda registrado quién lo hizo.
  */
 export async function registrarAjusteAction(
   _prevState: RegistrarAjusteResult | undefined,
   formData: FormData
 ): Promise<RegistrarAjusteResult> {
   const session = await auth();
-  if (!session || !puedeGestionar(session.user.rol)) {
+  if (!session || !esAdmin(session.user.rol)) {
     return { error: "No autorizado." };
   }
 
@@ -84,6 +86,19 @@ export async function registrarAjusteAction(
   }
   if (typeof nota !== "string" || !nota.trim()) {
     return { error: "Escribe una nota explicando el ajuste (obligatoria)." };
+  }
+
+  const password = formData.get("password");
+  if (typeof password !== "string" || !password) {
+    return { error: "Escribe tu contraseña para confirmar." };
+  }
+  const { rows: yo } = await query<{ password_hash: string }>(
+    "SELECT password_hash FROM usuarios WHERE id = $1",
+    [Number(session.user.id)]
+  );
+  const passwordValida = yo[0] ? await bcrypt.compare(password, yo[0].password_hash) : false;
+  if (!passwordValida) {
+    return { error: "Contraseña incorrecta." };
   }
 
   const { rows } = await query<{ sucursal_id: number; tipo: string }>(

@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { query } from "@/lib/db";
 import { dinero, dineroEntero, miles } from "@/lib/formato";
 import { INVENTARIO_MUESTRA_DINERO } from "@/lib/funciones";
+import { esAdmin } from "@/lib/permisos";
 import Header from "@/components/Header";
 import AdminNav from "@/components/AdminNav";
 import EntradaForm from "./entrada-form";
@@ -82,7 +83,7 @@ export default async function AdminInventarioPage({
   // El dinero (valor del inventario a precio de lista) solo lo ve el administrador, y solo si
   // INVENTARIO_MUESTRA_DINERO está activo (src/lib/funciones.ts). El panel puede estar abierto
   // en una tablet o equipo compartido, así que para los demás roles ni se dibuja.
-  const verDinero = INVENTARIO_MUESTRA_DINERO && session.user.rol === "admin";
+  const verDinero = INVENTARIO_MUESTRA_DINERO && esAdmin(session.user.rol);
 
   const sp = await searchParams;
   const sucursalSel = Number(parametro(sp, "sucursal")) || 0;

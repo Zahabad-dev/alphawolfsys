@@ -16,7 +16,7 @@ export default function AjusteForm({
   return (
     <details className="rounded-2xl border border-white/10 bg-brand-gray2 p-4">
       <summary className="cursor-pointer text-sm font-semibold text-brand-cream/80">
-        Ajustar stock (corrección — solo admin)
+        Ajustar stock (corrección — solo administración)
       </summary>
 
       <form action={formAction} className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
@@ -69,6 +69,17 @@ export default function AjusteForm({
             required
             placeholder="ej. corte mal capturado, merma de tela"
             className="rounded-lg border border-white/10 bg-brand-black px-3 py-2 text-brand-cream outline-none focus:border-brand-gold"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm text-brand-cream/80">
+          Tu contraseña
+          <input
+            name="password"
+            type="password"
+            required
+            autoComplete="current-password"
+            className="w-44 rounded-lg border border-white/10 bg-brand-black px-3 py-2 text-brand-cream outline-none focus:border-brand-gold"
           />
         </label>
 

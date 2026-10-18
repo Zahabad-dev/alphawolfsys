@@ -18,10 +18,6 @@ export default auth((req) => {
     return NextResponse.redirect(new URL("/venta", req.nextUrl));
   }
 
-  if (req.auth && pathname.startsWith("/admin") && req.auth.user.rol === "soporte") {
-    return NextResponse.redirect(new URL("/soporte", req.nextUrl));
-  }
-
   if (req.auth && pathname.startsWith("/soporte") && req.auth.user.rol === "vendedor") {
     return NextResponse.redirect(new URL("/venta", req.nextUrl));
   }

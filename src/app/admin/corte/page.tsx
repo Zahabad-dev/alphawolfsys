@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
-import { puedeGestionar } from "@/lib/permisos";
+import { esAdmin } from "@/lib/permisos";
 import Header from "@/components/Header";
 import AdminNav from "@/components/AdminNav";
 import CorteForm from "./corte-form";
@@ -47,7 +47,7 @@ export default async function AdminCortePage() {
           <CorteForm lotes={preciosParaForm} />
         )}
 
-        {puedeGestionar(session.user.rol) && preciosParaForm.length > 0 && (
+        {esAdmin(session.user.rol) && preciosParaForm.length > 0 && (
           <AjusteForm lotes={preciosParaForm} />
         )}
 

@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
-import { puedeGestionar } from "@/lib/permisos";
+import { esAdmin, puedeGestionar } from "@/lib/permisos";
 
 async function requireStaff() {
   const session = await auth();
@@ -142,7 +142,7 @@ export async function eliminarVendedorAction(
   formData: FormData
 ): Promise<EliminarVendedorResult> {
   const session = await auth();
-  if (!session || session.user.rol !== "admin") {
+  if (!session || !esAdmin(session.user.rol)) {
     return { error: "Solo un administrador puede eliminar usuarios." };
   }
 

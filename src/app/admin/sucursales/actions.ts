@@ -3,7 +3,7 @@
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
-import { puedeGestionar } from "@/lib/permisos";
+import { esAdmin, puedeGestionar } from "@/lib/permisos";
 import { query, withTransaction } from "@/lib/db";
 
 async function requireStaff() {
@@ -110,7 +110,7 @@ export async function eliminarSucursalAction(
   formData: FormData
 ): Promise<EliminarSucursalResult> {
   const session = await auth();
-  if (!session || session.user.rol !== "admin") {
+  if (!session || !esAdmin(session.user.rol)) {
     return { error: "No autorizado." };
   }
 

@@ -36,7 +36,7 @@ export default async function SoportePage({
   return (
     <div className="flex min-h-screen flex-col">
       <Header titulo="Soporte" subtitulo="Alertas de errores (n8n y respaldos)" />
-      {session.user.rol !== "soporte" && <AdminNav />}
+      <AdminNav />
       <main className="flex flex-1 flex-col gap-4 p-4 sm:p-6">
         <div className="flex items-center gap-3">
           <a

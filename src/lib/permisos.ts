@@ -3,18 +3,20 @@ import type { Rol } from "@/types/next-auth";
 /**
  * Política de permisos en un solo lugar.
  *
- * - Gerente: maneja casi todo como el administrador (precios, sucursales,
- *   usuarios, contraseñas, ajustes de inventario, traspasos, cortes…).
- * - Lo ÚNICO que el gerente no puede hacer: eliminar vendedores ni eliminar
- *   sucursales (decisión del cliente). Eso queda solo para el administrador.
+ * - "Administración" = administrador + soporte: poder total sobre el panel. Soporte tiene la
+ *   misma vista y los mismos poderes que el administrador para poder ejecutar cambios cuando
+ *   el dueño no está.
+ * - Gerente: gestiona casi todo (precios, sucursales, usuarios, contraseñas, traspasos, cortes…).
+ *   NO puede lo más delicado: eliminar vendedores ni sucursales, ni hacer ajustes de inventario.
+ * - Vendedor: solo vende y consulta el inventario de su sucursal.
  */
 
-/** Administrador o gerente: puede crear/editar/gestionar. */
-export function puedeGestionar(rol: Rol | undefined): boolean {
-  return rol === "admin" || rol === "gerente";
+/** Administración (administrador o soporte): eliminar vendedores/sucursales y ajustes de inventario. */
+export function esAdmin(rol: Rol | undefined): boolean {
+  return rol === "admin" || rol === "soporte";
 }
 
-/** Solo administrador: eliminar vendedores y eliminar sucursales. */
-export function esAdmin(rol: Rol | undefined): boolean {
-  return rol === "admin";
+/** Administración o gerente: puede crear/editar/gestionar. */
+export function puedeGestionar(rol: Rol | undefined): boolean {
+  return rol === "admin" || rol === "gerente" || rol === "soporte";
 }
