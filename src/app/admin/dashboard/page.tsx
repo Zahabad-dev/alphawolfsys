@@ -5,6 +5,10 @@ import Header from "@/components/Header";
 import AdminNav from "@/components/AdminNav";
 import NotificacionesToggle from "./notificaciones-toggle";
 import { etiquetaMotivo } from "@/lib/motivos-salida";
+import { cifrasDesbloqueadasHasta } from "@/lib/dashboard-candado";
+import { formatearHora } from "@/lib/fechas";
+import CandadoCifras from "./candado-cifras";
+import { ocultarCifrasAction } from "./candado-actions";
 
 interface ResumenRow {
   piezas_hoy: number;
@@ -46,18 +50,14 @@ function money(v: string | number) {
   return `$${Number(v).toFixed(2)}`;
 }
 
-export default async function AdminDashboardPage() {
-  const session = await auth();
-  if (!session || session.user.rol === "vendedor") redirect("/login");
 
+async function cargarCifras() {
   const [
     { rows: resumenRows },
     { rows: porSucursal },
     { rows: topLotes },
-    { rows: stockBajo },
     { rows: salidasMes },
-  ] =
-    await Promise.all([
+  ] = await Promise.all([
       query<ResumenRow>(
         `SELECT
            COALESCE(SUM(CASE WHEN creado_en >= CURRENT_DATE THEN -cantidad ELSE 0 END),0)::int AS piezas_hoy,
@@ -94,14 +94,6 @@ export default async function AdminDashboardPage() {
          ORDER BY piezas DESC
          LIMIT 5`
       ),
-      query<StockBajoRow>(
-        `SELECT sa.lote_id, sa.nombre, sa.stock, s.nombre AS sucursal_nombre
-         FROM stock_actual sa
-         JOIN lotes l ON l.id = sa.lote_id
-         JOIN sucursales s ON s.id = sa.sucursal_id
-         WHERE sa.stock <= l.umbral_stock
-         ORDER BY sa.stock ASC`
-      ),
       query<SalidaMotivoRow>(
         `SELECT m.motivo,
                 SUM(-m.cantidad)::int AS piezas,
@@ -112,11 +104,32 @@ export default async function AdminDashboardPage() {
          GROUP BY m.motivo
          ORDER BY piezas DESC`
       ),
-    ]);
+  ]);
+  return { resumen: resumenRows[0], porSucursal, topLotes, salidasMes };
+}
 
-  const resumen = resumenRows[0];
-  const maxPiezasSucursal = Math.max(1, ...porSucursal.map((s) => s.piezas));
-  const maxPiezasLote = Math.max(1, ...topLotes.map((l) => l.piezas));
+export default async function AdminDashboardPage() {
+  const session = await auth();
+  if (!session || session.user.rol === "vendedor") redirect("/login");
+
+  // Las cifras de ventas solo se consultan (y se mandan a la pantalla) con el candado abierto:
+  // mientras esté bloqueado no sale ni un número de ventas en el HTML. El aviso de stock bajo es
+  // operativo y se ve siempre.
+  const hasta = await cifrasDesbloqueadasHasta(session.user.id);
+
+  const { rows: stockBajo } = await query<StockBajoRow>(
+    `SELECT sa.lote_id, sa.nombre, sa.stock, s.nombre AS sucursal_nombre
+     FROM stock_actual sa
+     JOIN lotes l ON l.id = sa.lote_id
+     JOIN sucursales s ON s.id = sa.sucursal_id
+     WHERE sa.stock <= l.umbral_stock
+     ORDER BY sa.stock ASC`
+  );
+
+  const cifras = hasta ? await cargarCifras() : null;
+
+  const maxPiezasSucursal = cifras ? Math.max(1, ...cifras.porSucursal.map((s) => s.piezas)) : 1;
+  const maxPiezasLote = cifras ? Math.max(1, ...cifras.topLotes.map((l) => l.piezas)) : 1;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -125,22 +138,48 @@ export default async function AdminDashboardPage() {
       <main className="flex flex-1 flex-col gap-8 p-4 sm:p-6">
         <NotificacionesToggle />
 
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <StatCard titulo="Hoy" piezas={resumen.piezas_hoy} total={resumen.total_hoy} />
-          <StatCard titulo="Esta semana" piezas={resumen.piezas_semana} total={resumen.total_semana} />
-          <StatCard titulo="Este mes" piezas={resumen.piezas_mes} total={resumen.total_mes} />
-        </section>
+        {cifras && hasta ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand-gold/30 bg-brand-gold/10 px-4 py-3 text-sm">
+            <span className="text-brand-cream/80">
+              Cifras visibles hasta las {formatearHora(hasta)}. Después se ocultan solas.
+            </span>
+            <form action={ocultarCifrasAction}>
+              <button
+                type="submit"
+                className="rounded-full border border-white/20 px-4 py-1.5 text-brand-cream/80 hover:border-brand-gold hover:text-brand-gold"
+              >
+                Ocultar ahora
+              </button>
+            </form>
+          </div>
+        ) : (
+          <CandadoCifras />
+        )}
 
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="rounded-2xl border border-white/10 bg-brand-gray2 p-4">
-            <p className="text-sm text-brand-cream/70">Piezas cortadas (este mes)</p>
-            <p className="text-2xl font-bold text-brand-gold">{resumen.piezas_cortadas_mes} pzs</p>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-brand-gray2 p-4">
-            <p className="text-sm text-brand-cream/70">Piezas traspasadas a sucursales (este mes)</p>
-            <p className="text-2xl font-bold text-brand-gold">{resumen.piezas_traspasadas_mes} pzs</p>
-          </div>
-        </section>
+        {cifras && (
+          <>
+            <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <StatCard titulo="Hoy" piezas={cifras.resumen.piezas_hoy} total={cifras.resumen.total_hoy} />
+              <StatCard
+                titulo="Esta semana"
+                piezas={cifras.resumen.piezas_semana}
+                total={cifras.resumen.total_semana}
+              />
+              <StatCard titulo="Este mes" piezas={cifras.resumen.piezas_mes} total={cifras.resumen.total_mes} />
+            </section>
+
+            <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="rounded-2xl border border-white/10 bg-brand-gray2 p-4">
+                <p className="text-sm text-brand-cream/70">Piezas cortadas (este mes)</p>
+                <p className="text-2xl font-bold text-brand-gold">{cifras.resumen.piezas_cortadas_mes} pzs</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-brand-gray2 p-4">
+                <p className="text-sm text-brand-cream/70">Piezas traspasadas a sucursales (este mes)</p>
+                <p className="text-2xl font-bold text-brand-gold">{cifras.resumen.piezas_traspasadas_mes} pzs</p>
+              </div>
+            </section>
+          </>
+        )}
 
         {stockBajo.length > 0 && (
           <section className="rounded-2xl border border-brand-red/40 bg-brand-red/10 p-4">
@@ -157,11 +196,11 @@ export default async function AdminDashboardPage() {
           </section>
         )}
 
-        {salidasMes.length > 0 && (
+        {cifras && cifras.salidasMes.length > 0 && (
           <section>
             <p className="mb-3 text-sm text-brand-cream/70">Salidas sin venta (este mes)</p>
             <div className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-brand-gray2 p-4">
-              {salidasMes.map((s) => (
+              {cifras.salidasMes.map((s) => (
                 <div key={s.motivo} className="flex justify-between text-sm">
                   <span>{etiquetaMotivo(s.motivo)}</span>
                   <span className="text-brand-gold">
@@ -174,52 +213,56 @@ export default async function AdminDashboardPage() {
           </section>
         )}
 
-        <section>
-          <p className="mb-3 text-sm text-brand-cream/70">Ventas por sucursal (este mes)</p>
-          <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-brand-gray2 p-4">
-            {porSucursal.map((s) => (
-              <div key={s.sucursal_nombre}>
-                <div className="mb-1 flex justify-between text-sm">
-                  <span>{s.sucursal_nombre}</span>
-                  <span className="text-brand-gold">
-                    {s.piezas} pzs — {money(s.total)}
-                  </span>
-                </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-brand-black">
-                  <div
-                    className="h-full rounded-full bg-brand-gold"
-                    style={{ width: `${(s.piezas / maxPiezasSucursal) * 100}%` }}
-                  />
-                </div>
+        {cifras && (
+          <>
+            <section>
+              <p className="mb-3 text-sm text-brand-cream/70">Ventas por sucursal (este mes)</p>
+              <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-brand-gray2 p-4">
+                {cifras.porSucursal.map((s) => (
+                  <div key={s.sucursal_nombre}>
+                    <div className="mb-1 flex justify-between text-sm">
+                      <span>{s.sucursal_nombre}</span>
+                      <span className="text-brand-gold">
+                        {s.piezas} pzs — {money(s.total)}
+                      </span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-brand-black">
+                      <div
+                        className="h-full rounded-full bg-brand-gold"
+                        style={{ width: `${(s.piezas / maxPiezasSucursal) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </section>
+            </section>
 
-        <section>
-          <p className="mb-3 text-sm text-brand-cream/70">Top 5 precios vendidos (este mes)</p>
-          <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-brand-gray2 p-4">
-            {topLotes.length === 0 && (
-              <p className="text-sm text-brand-cream/50">Sin ventas este mes todavía.</p>
-            )}
-            {topLotes.map((l, i) => (
-              <div key={i}>
-                <div className="mb-1 flex justify-between text-sm">
-                  <span>
-                    {l.sucursal_nombre} — {l.lote_nombre}
-                  </span>
-                  <span className="text-brand-gold">{l.piezas} pzs</span>
-                </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-brand-black">
-                  <div
-                    className="h-full rounded-full bg-brand-gold"
-                    style={{ width: `${(l.piezas / maxPiezasLote) * 100}%` }}
-                  />
-                </div>
+            <section>
+              <p className="mb-3 text-sm text-brand-cream/70">Top 5 precios vendidos (este mes)</p>
+              <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-brand-gray2 p-4">
+                {cifras.topLotes.length === 0 && (
+                  <p className="text-sm text-brand-cream/50">Sin ventas este mes todavía.</p>
+                )}
+                {cifras.topLotes.map((l, i) => (
+                  <div key={i}>
+                    <div className="mb-1 flex justify-between text-sm">
+                      <span>
+                        {l.sucursal_nombre} — {l.lote_nombre}
+                      </span>
+                      <span className="text-brand-gold">{l.piezas} pzs</span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-brand-black">
+                      <div
+                        className="h-full rounded-full bg-brand-gold"
+                        style={{ width: `${(l.piezas / maxPiezasLote) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </section>
+            </section>
+          </>
+        )}
       </main>
     </div>
   );

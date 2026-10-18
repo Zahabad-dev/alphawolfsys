@@ -28,3 +28,12 @@ export function hoyISO(): string {
 export function primerDiaDelMes(): string {
   return `${hoyISO().slice(0, 8)}01`;
 }
+
+/** Solo la hora en México, ej. "06:45 p. m." */
+export function formatearHora(valor: number | string | Date): string {
+  return new Date(valor).toLocaleTimeString("es-MX", {
+    timeZone: ZONA_HORARIA,
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}

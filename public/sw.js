@@ -1,7 +1,7 @@
 // Las ventas ahora sí soportan cola offline (ver src/lib/offline-db.ts) — el
 // vendedor cuenta y guarda local si no hay señal, se sincroniza sola después.
 // Aquí solo nos aseguramos de que la app misma (el "shell") cargue sin señal.
-const CACHE_NAME = "wd-inventario-v7";
+const CACHE_NAME = "wd-inventario-v8";
 const ESTATICOS_PREFIX = ["/_next/static/", "/icons/"];
 
 // Pantallas principales de cada rol que se precargan apenas se instala el
@@ -20,7 +20,6 @@ const PRECARGA_URLS = [
   "/venta/escanear",
   "/venta/confirmar",
   "/inventario",
-  "/admin/dashboard",
   "/admin/precios",
   "/admin/inventario",
   "/admin/corte",
@@ -126,6 +125,13 @@ self.addEventListener("fetch", (event) => {
   // con datos locales propios (ver src/lib/offline-db.ts) para no mezclar
   // fuentes de verdad.
   if (url.pathname.startsWith("/api/")) return;
+
+  // Cifras del Dashboard: NUNCA se guardan copias (solo se ven con contraseña de administración;
+  // una copia guardada se podría abrir sin señal sin pedirla). Sin conexión: aviso de sin conexión.
+  if (url.pathname === "/admin/dashboard") {
+    event.respondWith(fetch(request).catch(() => caches.match("/offline")));
+    return;
+  }
 
   event.respondWith(
     fetch(request)
