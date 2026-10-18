@@ -1,6 +1,9 @@
 "use client";
 
 import { useMemo, useSyncExternalStore } from "react";
+import { dinero } from "@/lib/formato";
+
+export { dinero };
 
 /**
  * Carrito de la venta en curso, guardado en el celular (localStorage) para que
@@ -152,6 +155,3 @@ export function totalesDe(lineas: { precio: number; cantidad: number }[]) {
   return { piezas, total };
 }
 
-export function dinero(n: number) {
-  return `$${n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}

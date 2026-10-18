@@ -12,3 +12,11 @@
  * La base de datos y los reportes de admin (Historial, CSV, Dashboard) no cambian.
  */
 export const SALIDAS_HABILITADAS = false;
+
+/**
+ * Dinero en el Inventario (valor de las existencias a precio de lista).
+ * Con `true`, el valor lo ve ÚNICAMENTE el administrador (gerente y demás roles nunca: el panel
+ * puede estar abierto en una tablet o equipo compartido). Con `false`, el Inventario muestra
+ * solo piezas para todos, incluido el administrador.
+ */
+export const INVENTARIO_MUESTRA_DINERO = true;
