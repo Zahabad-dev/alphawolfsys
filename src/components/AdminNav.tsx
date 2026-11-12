@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { auth } from "@/auth";
+import { etiquetaRol } from "@/lib/permisos";
 
 const links = [
   { href: "/admin/dashboard", label: "Dashboard" },
@@ -14,9 +16,15 @@ const links = [
   { href: "/soporte", label: "Soporte" },
 ];
 
-export default function AdminNav() {
+export default async function AdminNav() {
+  // Quién tiene la sesión abierta: en una tablet compartida, saber con qué usuario se está
+  // trabajando evita registrar cosas a nombre de otra persona.
+  const session = await auth();
+  const nombre = session?.user?.name;
+  const rol = etiquetaRol(session?.user?.rol);
+
   return (
-    <nav className="flex flex-wrap gap-1 border-b border-white/10 bg-brand-gray px-4 py-2">
+    <nav className="flex flex-wrap items-center gap-1 border-b border-white/10 bg-brand-gray px-4 py-2">
       {links.map((l) => (
         <Link
           key={l.href}
@@ -26,6 +34,16 @@ export default function AdminNav() {
           {l.label}
         </Link>
       ))}
+      {nombre && (
+        <p
+          className="ml-auto rounded-full border border-brand-gold/40 bg-brand-gold/10 px-3 py-1 text-sm text-brand-cream"
+          title="Usuario con la sesión abierta"
+        >
+          <span className="text-brand-cream/70">Sesión: </span>
+          <strong className="text-brand-gold">{nombre}</strong>
+          {rol && <span className="text-brand-cream/70"> · {rol}</span>}
+        </p>
+      )}
     </nav>
   );
 }

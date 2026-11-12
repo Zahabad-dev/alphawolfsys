@@ -11,6 +11,22 @@ import type { Rol } from "@/types/next-auth";
  * - Vendedor: solo vende y consulta el inventario de su sucursal.
  */
 
+/** Nombre del rol para mostrarlo en pantalla (la barra de arriba dice con quién se está trabajando). */
+export function etiquetaRol(rol: Rol | undefined): string {
+  switch (rol) {
+    case "admin":
+      return "Administrador";
+    case "gerente":
+      return "Gerente";
+    case "soporte":
+      return "Soporte";
+    case "vendedor":
+      return "Vendedor";
+    default:
+      return "";
+  }
+}
+
 /** Administración (administrador o soporte): eliminar vendedores/sucursales y ajustes de inventario. */
 export function esAdmin(rol: Rol | undefined): boolean {
   return rol === "admin" || rol === "soporte";
