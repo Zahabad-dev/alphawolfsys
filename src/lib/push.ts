@@ -22,10 +22,14 @@ interface SubRow {
 }
 
 /**
- * Manda un push a todo el staff (admin + gerente) suscrito. Nunca lanza: una
- * notificación fallida no debe tumbar la venta/ajuste/traspaso que la disparó.
+ * Manda un push al staff suscrito (por defecto admin + gerente; se puede acotar por rol, por
+ * ejemplo solo a quien autoriza). Nunca lanza: una notificación fallida no debe tumbar la
+ * venta/ajuste/traspaso que la disparó.
  */
-export async function notificarStaff(payload: { title: string; body: string; url?: string }) {
+export async function notificarStaff(
+  payload: { title: string; body: string; url?: string },
+  roles: string[] = ["admin", "gerente"]
+) {
   if (!asegurarVapid()) return;
 
   try {
@@ -33,7 +37,8 @@ export async function notificarStaff(payload: { title: string; body: string; url
       `SELECT ps.id, ps.endpoint, ps.p256dh, ps.auth
        FROM push_subscriptions ps
        JOIN usuarios u ON u.id = ps.usuario_id
-       WHERE u.rol IN ('admin', 'gerente') AND u.activo = true`
+       WHERE u.rol = ANY($1::text[]) AND u.activo = true`,
+      [roles]
     );
 
     await Promise.all(

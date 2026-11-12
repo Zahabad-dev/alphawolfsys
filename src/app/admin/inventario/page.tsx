@@ -3,12 +3,11 @@ import { auth } from "@/auth";
 import { query } from "@/lib/db";
 import { dinero, dineroEntero, miles } from "@/lib/formato";
 import { INVENTARIO_MUESTRA_DINERO } from "@/lib/funciones";
-import { esAdmin } from "@/lib/permisos";
+import { esAdmin, puedeGestionar } from "@/lib/permisos";
 import Header from "@/components/Header";
 import AdminNav from "@/components/AdminNav";
 import EntradaForm from "./entrada-form";
 import UmbralForm from "./umbral-form";
-import AjusteForm from "./ajuste-form";
 
 interface StockRow {
   lote_id: number;
@@ -92,9 +91,10 @@ export default async function AdminInventarioPage({
     ? parametro(sp, "estado")
     : "";
   const q = parametro(sp, "q").trim();
-  // Botón "Ajustar" de un renglón: abre el formulario de ajuste con ese lugar y precio elegidos.
-  const ajustarSel = Number(parametro(sp, "ajustar")) || 0;
-  const puedeAjustar = esAdmin(session.user.rol);
+  // "Ajustar" de un renglón lleva a la pantalla de Ajustes con ese lugar y precio elegidos. La
+  // administración ajusta directo; la gerente pide el ajuste y la administración lo autoriza.
+  const puedeAjustar = puedeGestionar(session.user.rol);
+  const textoAjustar = esAdmin(session.user.rol) ? "Ajustar" : "Pedir ajuste";
 
   const { rows: crudas } = await query<StockRow>(
     `SELECT sa.lote_id, sa.nombre, sa.precio_mxn, sa.stock, l.activo, l.umbral_stock,
@@ -180,19 +180,7 @@ export default async function AdminInventarioPage({
     return s ? `/admin/inventario?${s}` : "/admin/inventario";
   };
 
-  const hrefAjustar = (loteId: number) => {
-    const p = new URLSearchParams();
-    if (sucursalSel) p.set("sucursal", String(sucursalSel));
-    if (estadoSel) p.set("estado", estadoSel);
-    if (q) p.set("q", q);
-    p.set("ajustar", String(loteId));
-    return `/admin/inventario?${p.toString()}#ajuste`;
-  };
-
-  const lotesAjuste = rows.map((r) => ({
-    id: r.lote_id,
-    etiqueta: `${r.sucursal_nombre} — ${dinero(Number(r.precio_mxn))} (stock ${miles(r.stock)})`,
-  }));
+  const hrefAjustar = (loteId: number) => `/admin/ajustes?lote=${loteId}`;
 
   const lotesParaForm = rows.map((r) => ({
     id: r.lote_id,
@@ -318,11 +306,13 @@ export default async function AdminInventarioPage({
           </details>
 
           {puedeAjustar && (
-            <AjusteForm
-              key={ajustarSel}
-              lotes={lotesAjuste}
-              loteInicial={ajustarSel || undefined}
-            />
+            <p className="text-sm text-brand-cream/70">
+              ¿Algo no cuadra con las piezas?{" "}
+              <a href="/admin/ajustes" className="text-brand-gold underline">
+                Ve a Ajustes
+              </a>{" "}
+              para corregirlo con su motivo y comentario.
+            </p>
           )}
         </section>
 
@@ -412,7 +402,7 @@ export default async function AdminInventarioPage({
                                 href={hrefAjustar(f.loteId)}
                                 className="text-sm text-brand-cream/70 underline hover:text-brand-gold"
                               >
-                                Ajustar
+                                {textoAjustar}
                               </a>
                             </td>
                           )}

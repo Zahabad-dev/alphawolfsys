@@ -6,6 +6,7 @@ const links = [
   { href: "/admin/inventario", label: "Inventario" },
   { href: "/admin/corte", label: "Corte" },
   { href: "/admin/traspasos", label: "Traspasos" },
+  { href: "/admin/ajustes", label: "Ajustes" },
   { href: "/admin/usuarios", label: "Vendedores" },
   { href: "/admin/sucursales", label: "Sucursales" },
   { href: "/admin/historial", label: "Historial" },
