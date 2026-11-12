@@ -4,6 +4,7 @@ import { query } from "@/lib/db";
 import { toCsv, csvResponse } from "@/lib/csv";
 import { etiquetaMotivo } from "@/lib/motivos-salida";
 import { formatearFechaHora } from "@/lib/fechas";
+import { diaValido, enteroPositivo } from "@/lib/historial";
 
 const TIPOS = [
   "entrada",
@@ -16,7 +17,7 @@ const TIPOS = [
 ] as const;
 
 interface MovimientoRow {
-  creado_en: string;
+  creado_en: Date | string;
   sucursal_nombre: string;
   lote_nombre: string;
   tipo: string;
@@ -34,17 +35,27 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url);
-  const sucursalId = searchParams.get("sucursal_id");
+  const sucursalId = enteroPositivo(searchParams.get("sucursal_id"));
   const tipo = searchParams.get("tipo");
   const desde = searchParams.get("desde");
   const hasta = searchParams.get("hasta");
+  const usuarioId = enteroPositivo(searchParams.get("usuario_id"));
+
+  // Una fecha que no es fecha real hacía fallar la consulta con un error 500 de la base.
+  if ((desde && !diaValido(desde)) || (hasta && !diaValido(hasta))) {
+    return new Response("Fecha no válida (use AAAA-MM-DD)", { status: 400 });
+  }
 
   const condiciones: string[] = [];
   const params: unknown[] = [];
 
   if (sucursalId) {
-    params.push(Number(sucursalId));
+    params.push(sucursalId);
     condiciones.push(`m.sucursal_id = $${params.length}`);
+  }
+  if (usuarioId) {
+    params.push(usuarioId);
+    condiciones.push(`m.usuario_id = $${params.length}`);
   }
   if (tipo && (TIPOS as readonly string[]).includes(tipo)) {
     params.push(tipo);
