@@ -5,6 +5,7 @@ import { etiquetaRol } from "@/lib/permisos";
 const links = [
   { href: "/admin/dashboard", label: "Dashboard" },
   { href: "/admin/precios", label: "Precios" },
+  { href: "/admin/modelos", label: "Modelos" },
   { href: "/admin/inventario", label: "Inventario" },
   { href: "/admin/corte", label: "Corte" },
   { href: "/admin/traspasos", label: "Traspasos" },
