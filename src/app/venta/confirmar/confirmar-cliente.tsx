@@ -77,10 +77,18 @@ export default function ConfirmarCliente() {
       <div className="flex min-h-screen flex-col">
         <Header titulo="Confirmar venta" />
         <main className="flex flex-1 flex-col items-center justify-center gap-4 p-4 text-center">
-          <p className="text-brand-red">
-            No tengo este precio guardado. Conéctate una vez con señal para actualizar el
-            catálogo de tu sucursal, o revisa que el QR sea de tu propia sucursal.
-          </p>
+          {/^WM-/.test(token) ? (
+            <p className="text-brand-red">
+              Esta etiqueta de modelo todavía no tiene precio para tu sucursal (o tu sucursal no maneja
+              ese precio). Avisa a la administración. Si no tienes señal, conéctate una vez para
+              actualizar el catálogo.
+            </p>
+          ) : (
+            <p className="text-brand-red">
+              No tengo este precio guardado. Conéctate una vez con señal para actualizar el
+              catálogo de tu sucursal, o revisa que el QR sea de tu propia sucursal.
+            </p>
+          )}
           <a href="/venta" className="text-brand-gold underline">
             Volver
           </a>

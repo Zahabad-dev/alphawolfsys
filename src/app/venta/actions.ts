@@ -67,8 +67,11 @@ async function resolverEtiquetaModelo(
       `SELECT m.id AS modelo_id, pm.precio_mxn AS precio_modelo,
               l.id, l.precio_mxn, l.sucursal_id, l.activo
          FROM modelos m
-         LEFT JOIN precios_modelo pm
-                ON pm.modelo_id = m.id AND pm.sucursal_id = $2 AND pm.vigente_hasta IS NULL
+         LEFT JOIN LATERAL (
+             SELECT pm.precio_mxn FROM precios_modelo pm JOIN sucursales s ON s.id = pm.sucursal_id
+              WHERE pm.modelo_id = m.id AND pm.vigente_hasta IS NULL AND (pm.sucursal_id = $2 OR s.tipo = 'almacen')
+              ORDER BY (pm.sucursal_id = $2) DESC LIMIT 1
+         ) pm ON true
          LEFT JOIN lotes l
                 ON l.sucursal_id = $2 AND l.precio_mxn = pm.precio_mxn AND l.activo
         WHERE m.qr_token = $1
@@ -83,7 +86,7 @@ async function resolverEtiquetaModelo(
   }
   const r = rows[0];
   if (!r) return { error: "Etiqueta no encontrada." };
-  if (r.precio_modelo === null) return { error: "Este modelo no tiene precio en tu sucursal. Avisa a la administración." };
+  if (r.precio_modelo === null) return { error: "Este modelo todavía no tiene precio. Avisa a la administración." };
   if (!r.id) {
     return {
       error: `El precio de este modelo ($${Number(r.precio_modelo).toFixed(2)}) no está dado de alta en tu sucursal. Avisa a la administración.`,

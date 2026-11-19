@@ -37,14 +37,19 @@ export async function GET() {
     [user.sucursalId]
   );
 
-  // Etiquetas nuevas (por modelo): cada modelo con precio en esta sucursal apunta al lote propio con ese
-  // mismo precio (el mismo stock que sus etiquetas de precio). Si la base aún no tiene las tablas de
-  // modelos, el catálogo queda como siempre.
+  // Etiquetas nuevas (por modelo): cada modelo apunta al lote propio con su precio (el mismo stock que sus
+  // etiquetas de precio). El precio es el del modelo en esta sucursal; si aquí no tiene, el del Almacén,
+  // igual que la etiqueta de precio del Almacén se acepta en cualquier sucursal que maneje ese precio.
+  // Si la base aún no tiene las tablas de modelos, el catálogo queda como siempre.
   try {
     const { rows: modelos } = await query<LoteRow>(
       `SELECT m.qr_token, m.nombre, l.precio_mxn, COALESCE(sa.stock, 0) AS stock
          FROM modelos m
-         JOIN precios_modelo pm ON pm.modelo_id = m.id AND pm.sucursal_id = $1 AND pm.vigente_hasta IS NULL
+         JOIN LATERAL (
+             SELECT pm.precio_mxn FROM precios_modelo pm JOIN sucursales s ON s.id = pm.sucursal_id
+              WHERE pm.modelo_id = m.id AND pm.vigente_hasta IS NULL AND (pm.sucursal_id = $1 OR s.tipo = 'almacen')
+              ORDER BY (pm.sucursal_id = $1) DESC LIMIT 1
+         ) pm ON true
          JOIN LATERAL (
            SELECT id, precio_mxn FROM lotes
             WHERE sucursal_id = $1 AND precio_mxn = pm.precio_mxn AND activo
