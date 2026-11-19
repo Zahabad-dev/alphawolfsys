@@ -241,7 +241,7 @@ export default async function EtiquetaModeloPage({
           <h2 className="text-base font-semibold">Conteo de este modelo (control interno)</h2>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[
-              ["Etiquetadas", conteo.total.entradas],
+              ["Entraron", conteo.total.entradas],
               ["Vendidas", conteo.total.vendidas],
               ["Otras salidas", conteo.total.salidas],
               ["Quedan", conteo.total.existencia],

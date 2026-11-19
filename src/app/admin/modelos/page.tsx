@@ -10,6 +10,7 @@ import { enteroPositivo } from "@/lib/historial";
 import { claveModelo, textoEtiquetaAuto } from "@/lib/modelos";
 import { dinero } from "@/lib/formato";
 import { conteoPorModelo } from "@/lib/conteo-modelos";
+import EntradaRapida from "./entrada-rapida";
 import ModeloForm, { type Sugerencias, type TallaOpcion } from "./modelo-form";
 import { EstadoModeloForm, NuevaTallaForm, TallaFila } from "./estado-form";
 
@@ -92,6 +93,12 @@ export default async function AdminModelosPage({
   const { tallas, modelos } = datos;
   // Conteo interno por modelo (null si falta la migración 016: la columna simplemente no se muestra).
   const conteo = await conteoPorModelo();
+  const { rows: sucursalesActivas } = conteo
+    ? await query<{ id: number; nombre: string; tipo: string }>(
+        "SELECT id, nombre, tipo FROM sucursales WHERE activa ORDER BY tipo = 'almacen' DESC, nombre"
+      )
+    : { rows: [] };
+  const sucursalEntrada = sucursalesActivas.find((s) => s.tipo === "almacen")?.id ?? sucursalesActivas[0]?.id ?? 0;
   const nombreTalla = new Map(tallas.map((t) => [t.id, t.nombre]));
   const ordenTalla = new Map(tallas.map((t, i) => [t.id, i]));
   const catalogo = modelos.map((m) => ({ id: m.id, nombre: m.nombre }));
@@ -271,14 +278,29 @@ export default async function AdminModelosPage({
                       <td className="whitespace-nowrap px-4 py-2">
                         {(() => {
                           const c = conteo.get(m.id);
-                          if (!c) return <span className="text-xs text-brand-cream/70">sin registrar</span>;
                           return (
                             <>
-                              <span className="block font-semibold text-brand-cream">Quedan {c.existencia}</span>
-                              <span className="block text-xs text-brand-cream/70">
-                                etiq. {c.entradas} · vend. {c.vendidas}
-                                {c.salidas ? ` · salidas ${c.salidas}` : ""}
-                              </span>
+                              {c ? (
+                                <>
+                                  <span className="block font-semibold text-brand-cream">Quedan {c.existencia}</span>
+                                  <span className="block text-xs text-brand-cream/70">
+                                    entraron {c.entradas} · vend. {c.vendidas}
+                                    {c.salidas ? ` · salidas ${c.salidas}` : ""}
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="block text-xs text-brand-cream/70">sin registrar</span>
+                              )}
+                              {puedeCambiarPrecios && sucursalesActivas.length > 0 && (
+                                <div className="mt-1">
+                                  <EntradaRapida
+                                    modeloId={m.id}
+                                    nombre={m.nombre}
+                                    sucursales={sucursalesActivas}
+                                    sucursalInicial={sucursalEntrada}
+                                  />
+                                </div>
+                              )}
                             </>
                           );
                         })()}

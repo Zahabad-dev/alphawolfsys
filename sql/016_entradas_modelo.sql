@@ -24,3 +24,6 @@ CREATE TABLE IF NOT EXISTS entradas_modelo (
 );
 
 CREATE INDEX IF NOT EXISTS entradas_modelo_modelo_idx ON entradas_modelo (modelo_id, creado_en DESC);
+
+-- Por si la tabla se creó antes de agregar la llave por intento (idempotente; no hace nada si ya existe).
+ALTER TABLE entradas_modelo ADD COLUMN IF NOT EXISTS intento UUID UNIQUE;

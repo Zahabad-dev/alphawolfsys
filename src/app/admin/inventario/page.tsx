@@ -4,6 +4,7 @@ import { query } from "@/lib/db";
 import { dinero, dineroEntero, miles } from "@/lib/formato";
 import { INVENTARIO_MUESTRA_DINERO } from "@/lib/funciones";
 import { esAdmin, puedeGestionar } from "@/lib/permisos";
+import { modelosPorPrecio } from "@/lib/conteo-modelos";
 import Header from "@/components/Header";
 import AdminNav from "@/components/AdminNav";
 import EntradaForm from "./entrada-form";
@@ -182,6 +183,14 @@ export default async function AdminInventarioPage({
 
   const hrefAjustar = (loteId: number) => `/admin/ajustes?lote=${loteId}`;
 
+  // Conteo interno por modelo (total, todas las sucursales), agrupado por precio. null = falta migración.
+  const porModelo = await modelosPorPrecio();
+  const piezasPorPrecio = new Map<number, number>();
+  for (const r of rows) {
+    const p = Number(r.precio_mxn);
+    piezasPorPrecio.set(p, (piezasPorPrecio.get(p) ?? 0) + r.stock);
+  }
+
   const lotesParaForm = rows.map((r) => ({
     id: r.lote_id,
     etiqueta: `${r.sucursal_nombre} — ${dinero(Number(r.precio_mxn))}`,
@@ -315,6 +324,45 @@ export default async function AdminInventarioPage({
             </p>
           )}
         </section>
+
+        {porModelo && porModelo.length > 0 && (
+          <details className="rounded-2xl border border-white/10 bg-brand-gray2 px-4 py-3">
+            <summary className="cursor-pointer text-sm font-semibold text-brand-cream">
+              Piezas por modelo (control interno)
+            </summary>
+            <p className="mt-2 text-xs text-brand-cream/70">
+              Conteo total de todas las sucursales. «Sin modelo» son las piezas de ese precio que todavía no se han
+              registrado por modelo; baja conforme se registran entradas en Modelos.
+            </p>
+            <div className="mt-3 flex flex-col gap-3">
+              {porModelo.map((g) => {
+                const total = piezasPorPrecio.get(g.precio) ?? 0;
+                return (
+                  <div key={g.precio} className="rounded-xl border border-white/10 bg-brand-black/40 p-3 text-sm">
+                    <div className="flex justify-between font-semibold text-brand-cream">
+                      <span>{dinero(g.precio)}</span>
+                      <span>{miles(total)} pzs</span>
+                    </div>
+                    <ul className="mt-2 flex flex-col gap-1 text-brand-cream/90">
+                      {g.modelos.map((m) => (
+                        <li key={m.id} className="flex justify-between gap-3">
+                          <a href={`/admin/modelos/${m.id}/etiqueta`} className="hover:text-brand-gold">
+                            {m.nombre}
+                          </a>
+                          <span>{miles(m.existencia)}</span>
+                        </li>
+                      ))}
+                      <li className="flex justify-between gap-3 text-brand-cream/60">
+                        <span>Sin modelo (aún no registradas)</span>
+                        <span>{miles(Math.max(0, total - g.conModelo))}</span>
+                      </li>
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+          </details>
+        )}
 
         {/* Detalle por lugar */}
         {visibles.length === 0 ? (

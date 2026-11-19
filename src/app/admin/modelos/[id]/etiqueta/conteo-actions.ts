@@ -69,7 +69,7 @@ export async function registrarEtiquetadoAction(_prev: ConteoResult | undefined,
   return {
     success: correccion
       ? `Corrección registrada: ${piezas > 0 ? "+" : "−"}${n} ${n === 1 ? "pieza" : "piezas"}.`
-      : `Registradas ${n} ${n === 1 ? "pieza etiquetada" : "piezas etiquetadas"}.`,
+      : `Entrada registrada: ${n} ${n === 1 ? "pieza" : "piezas"}.`,
     registrado: true,
   };
 }

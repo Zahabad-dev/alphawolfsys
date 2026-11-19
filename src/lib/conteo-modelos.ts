@@ -11,6 +11,42 @@ export interface ConteoModelo {
   existencia: number;
 }
 
+export interface GrupoPrecio {
+  precio: number;
+  modelos: { id: number; nombre: string; existencia: number }[];
+  /** Suma de la existencia de esos modelos. */
+  conModelo: number;
+}
+
+/**
+ * Para Inventario: los modelos con conteo, agrupados por su precio (el del Almacén; si no tiene, otro vigente).
+ * Es un conteo TOTAL (todas las sucursales), porque los traspasos se siguen haciendo por precio.
+ * null si la base aún no tiene las tablas.
+ */
+export async function modelosPorPrecio(): Promise<GrupoPrecio[] | null> {
+  const conteo = await conteoPorModelo();
+  if (!conteo || conteo.size === 0) return conteo ? [] : null;
+  const { rows } = await query<{ id: number; nombre: string; precio: string | null }>(
+    `SELECT m.id, m.nombre,
+            (SELECT pm.precio_mxn FROM precios_modelo pm JOIN sucursales s ON s.id = pm.sucursal_id
+              WHERE pm.modelo_id = m.id AND pm.vigente_hasta IS NULL
+              ORDER BY (s.tipo = 'almacen') DESC, pm.id LIMIT 1) AS precio
+       FROM modelos m WHERE m.id = ANY($1::int[]) ORDER BY m.nombre`,
+    [[...conteo.keys()]]
+  );
+  const grupos = new Map<number, GrupoPrecio>();
+  for (const r of rows) {
+    if (r.precio === null) continue;
+    const precio = Number(r.precio);
+    const existencia = conteo.get(r.id)?.existencia ?? 0;
+    const g = grupos.get(precio) ?? { precio, modelos: [], conModelo: 0 };
+    g.modelos.push({ id: r.id, nombre: r.nombre, existencia });
+    g.conModelo += existencia;
+    grupos.set(precio, g);
+  }
+  return [...grupos.values()].sort((a, b) => a.precio - b.precio);
+}
+
 /**
  * Conteo interno por modelo. Devuelve null si la base aún no tiene la tabla (migración 016 pendiente), para
  * que las pantallas sigan funcionando sin esa parte.
