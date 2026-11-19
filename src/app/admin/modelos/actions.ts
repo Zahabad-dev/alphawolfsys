@@ -7,16 +7,21 @@ import { query, withTransaction } from "@/lib/db";
 import { esAdmin } from "@/lib/permisos";
 import { enteroPositivo } from "@/lib/historial";
 import {
-  NOMBRE_MODELO_MAX,
+  NOMBRE_BASE_MAX,
+  PARTE_MAX,
   TALLAS_POR_MODELO_MAX,
+  TEXTO_ETIQUETA_MAX,
+  type PartesModelo,
   claveModelo,
   codigoValido,
+  componerNombre,
   limpiarCodigo,
   limpiarNombreModelo,
   limpiarTalla,
   modelosParecidos,
   nombreSuficiente,
   tallaValida,
+  textoEtiquetaAuto,
 } from "@/lib/modelos";
 import type { Rol } from "@/types/next-auth";
 
@@ -39,25 +44,46 @@ async function administracionVigente(): Promise<number | null> {
   return rows[0]?.activo && esAdmin(rows[0].rol) ? Number(session.user.id) : null;
 }
 
-interface DatosModelo {
+interface DatosModelo extends PartesModelo {
   nombre: string;
   clave: string;
+  textoEtiqueta: string | null;
   codigo: string | null;
   tallas: number[];
   confirmado: boolean;
 }
 
 function leerModelo(formData: FormData): { error: string } | DatosModelo {
-  const nombre = limpiarNombreModelo(String(formData.get("nombre") ?? ""));
+  const parte = (k: string) => limpiarNombreModelo(String(formData.get(k) ?? ""));
+  const partes: PartesModelo = { base: parte("base"), variante: parte("variante"), distintivo: parte("distintivo"), color: parte("color") };
+  const nombre = componerNombre(partes);
+  const texto = parte("texto_etiqueta");
   const codigo = limpiarCodigo(String(formData.get("codigo") ?? ""));
   const tallas = [...new Set(formData.getAll("talla").map((t) => enteroPositivo(String(t))).filter(Boolean))];
-  if (!nombreSuficiente(nombre)) return { error: "Escribe el nombre completo del modelo." };
-  if (nombre.length > NOMBRE_MODELO_MAX) return { error: `El nombre es muy largo (máximo ${NOMBRE_MODELO_MAX} caracteres).` };
+  if (!nombreSuficiente(partes.base)) return { error: "Escribe el nombre del modelo." };
+  if (partes.base.length > NOMBRE_BASE_MAX) return { error: `El nombre del modelo es muy largo (máximo ${NOMBRE_BASE_MAX}).` };
+  if ([partes.variante, partes.distintivo, partes.color].some((p) => p.length > PARTE_MAX))
+    return { error: `Variante, distintivo y color llevan máximo ${PARTE_MAX} caracteres cada uno.` };
+  if (texto && (texto.length > TEXTO_ETIQUETA_MAX || !nombreSuficiente(texto)))
+    return { error: `El texto de la etiqueta lleva de 3 a ${TEXTO_ETIQUETA_MAX} caracteres.` };
+  if (!texto && textoEtiquetaAuto(partes).length > TEXTO_ETIQUETA_MAX)
+    return { error: `El nombre es muy largo para la etiqueta: escribe un texto de etiqueta de ${TEXTO_ETIQUETA_MAX} letras o menos.` };
   if (!codigoValido(codigo)) return { error: "El código solo lleva letras, números y guiones (máximo 20)." };
-  if (!tallas.length) return { error: "Marca al menos una talla que maneje el modelo." };
   if (tallas.length > TALLAS_POR_MODELO_MAX) return { error: "Son demasiadas tallas para un modelo." };
-  return { nombre, clave: claveModelo(nombre), codigo: codigo || null, tallas, confirmado: formData.get("confirmado") === "1" };
+  return {
+    ...partes,
+    nombre,
+    clave: claveModelo(nombre),
+    // Si es igual al automático no se guarda: así, si luego cambia el nombre, la etiqueta se actualiza sola.
+    textoEtiqueta: texto && texto !== textoEtiquetaAuto(partes) ? texto : null,
+    codigo: codigo || null,
+    tallas,
+    confirmado: formData.get("confirmado") === "1",
+  };
 }
+
+/** Las partes vacías se guardan como NULL. */
+const nulo = (s: string) => s || null;
 
 /** Avisa si hay modelos que podrían ser el mismo y no se confirmó que es distinto. */
 async function revisarParecidos(datos: DatosModelo, excluirId?: number): Promise<ModeloResult | null> {
@@ -125,8 +151,11 @@ export async function crearModeloAction(_prev: ModeloResult | undefined, formDat
   try {
     await withTransaction(async (client) => {
       const { rows } = await client.query<{ id: number }>(
-        `INSERT INTO modelos (nombre, nombre_clave, codigo, creado_por, actualizado_por) VALUES ($1, $2, $3, $4, $4) RETURNING id`,
-        [datos.nombre, datos.clave, datos.codigo, yo]
+        `INSERT INTO modelos (nombre_base, variante, distintivo, color, nombre, nombre_clave, texto_etiqueta, codigo,
+                              creado_por, actualizado_por)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9) RETURNING id`,
+        [datos.base, nulo(datos.variante), nulo(datos.distintivo), nulo(datos.color), datos.nombre, datos.clave,
+         datos.textoEtiqueta, datos.codigo, yo]
       );
       await guardarTallas(client, rows[0].id, datos.tallas);
     });
@@ -158,8 +187,11 @@ export async function editarModeloAction(_prev: ModeloResult | undefined, formDa
   try {
     const existe = await withTransaction(async (client) => {
       const r = await client.query(
-        `UPDATE modelos SET nombre = $2, nombre_clave = $3, codigo = $4, actualizado_por = $5, actualizado_en = now() WHERE id = $1`,
-        [id, datos.nombre, datos.clave, datos.codigo, yo]
+        `UPDATE modelos SET nombre_base = $2, variante = $3, distintivo = $4, color = $5, nombre = $6, nombre_clave = $7,
+                texto_etiqueta = $8, codigo = $9, actualizado_por = $10, actualizado_en = now()
+          WHERE id = $1`,
+        [id, datos.base, nulo(datos.variante), nulo(datos.distintivo), nulo(datos.color), datos.nombre, datos.clave,
+         datos.textoEtiqueta, datos.codigo, yo]
       );
       if (!r.rowCount) return false;
       await guardarTallas(client, id, datos.tallas);

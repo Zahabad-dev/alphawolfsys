@@ -3,8 +3,9 @@
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
-import { query } from "@/lib/db";
+import { query, withTransaction } from "@/lib/db";
 import { puedeGestionar } from "@/lib/permisos";
+import { leerPrecio } from "@/lib/modelos";
 
 async function requireStaff() {
   const session = await auth();
@@ -116,34 +117,80 @@ export async function actualizarPrecioAction(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
-  await requireStaff();
+  const session = await auth();
+  if (!session || !puedeGestionar(session.user.rol)) return { error: "No autorizado." };
+  const yo = Number(session.user.id);
+  const { rows: vigente } = await query<{ activo: boolean }>("SELECT activo FROM usuarios WHERE id = $1", [yo]);
+  if (!vigente[0]?.activo) return { error: "No autorizado." };
 
   const id = Number(formData.get("id"));
-  const precioNum = Number(formData.get("precio_mxn"));
+  const precioNum = leerPrecio(String(formData.get("precio_mxn") ?? ""));
 
-  if (!id) return { error: "Precio inválido." };
-  if (!precioNum || precioNum <= 0) {
-    return { error: "El precio debe ser mayor a 0." };
+  if (!Number.isSafeInteger(id) || id <= 0) return { error: "Precio inválido." };
+  if (precioNum === null) {
+    return { error: "Escribe un precio válido, mayor a 0 (ej. 350 o 350.50)." };
   }
 
-  const { rows: movRows } = await query<{ total: string }>(
-    "SELECT COUNT(*) AS total FROM movimientos_inventario WHERE lote_id = $1",
-    [id]
-  );
-  if (Number(movRows[0]?.total ?? 0) > 0) {
-    return {
-      error:
-        "Este precio ya tiene ventas/movimientos y probablemente su QR ya está impreso — editarlo cambiaría lo que ese QR muestra. Desactívalo y crea uno nuevo en su lugar.",
-    };
-  }
+  let resultado: string | null;
+  try {
+    resultado = await withTransaction<string | null>(async (client) => {
+      // Primero se bloquea el lote y DESPUÉS se revisan sus movimientos: una venta no puede colarse en medio.
+      const { rows: antes } = await client.query<{ precio_mxn: string; sucursal_id: number; activo: boolean }>(
+        "SELECT precio_mxn, sucursal_id, activo FROM lotes WHERE id = $1 FOR UPDATE",
+        [id]
+      );
+      const viejo = antes[0];
+      if (!viejo) return "Ese precio ya no existe. Recarga la página.";
+      const { rows: movRows } = await client.query<{ total: string }>(
+        "SELECT COUNT(*) AS total FROM movimientos_inventario WHERE lote_id = $1",
+        [id]
+      );
+      if (Number(movRows[0]?.total ?? 0) > 0) {
+        return "Este precio ya tiene ventas/movimientos y probablemente su QR ya está impreso — editarlo cambiaría lo que ese QR muestra. Desactívalo y crea uno nuevo en su lugar.";
+      }
+      await client.query("UPDATE lotes SET precio_mxn = $1, nombre = $2 WHERE id = $3", [
+        precioNum,
+        etiquetaDe(precioNum),
+        id,
+      ]);
 
-  await query("UPDATE lotes SET precio_mxn = $1, nombre = $2 WHERE id = $3", [
-    precioNum,
-    etiquetaDe(precioNum),
-    id,
-  ]);
+      // Los modelos que tenían ese precio en esa sucursal se mueven con él (queda en su historial). Solo si
+      // este precio está activo y no queda OTRO precio activo igual en la sucursal (si no, esos modelos
+      // siguen bien donde están). Tabla reciente: si esta base aún no la tiene, se omite.
+      if (!viejo.activo || Number(viejo.precio_mxn) === precioNum) return null;
+      const { rows: tabla } = await client.query<{ existe: boolean }>(
+        "SELECT to_regclass('public.precios_modelo') IS NOT NULL AS existe"
+      );
+      if (!tabla[0]?.existe) return null;
+      const { rows: otro } = await client.query(
+        "SELECT 1 FROM lotes WHERE sucursal_id = $1 AND precio_mxn = $2 AND activo AND id <> $3 LIMIT 1",
+        [viejo.sucursal_id, viejo.precio_mxn, id]
+      );
+      if (otro.length) return null;
+      const { rows: mover } = await client.query<{ id: number; modelo_id: number }>(
+        `UPDATE precios_modelo SET vigente_hasta = clock_timestamp(), quitado_por = $3
+          WHERE sucursal_id = $1 AND precio_mxn = $2 AND vigente_hasta IS NULL
+          RETURNING id, modelo_id`,
+        [viejo.sucursal_id, viejo.precio_mxn, yo]
+      );
+      for (const m of mover) {
+        await client.query(
+          `INSERT INTO precios_modelo (modelo_id, sucursal_id, precio_mxn, puesto_por, nota)
+           VALUES ($1, $2, $3, $4, 'Cambió el precio en Precios')`,
+          [m.modelo_id, viejo.sucursal_id, precioNum, yo]
+        );
+      }
+      return null;
+    });
+  } catch (err) {
+    const code = (err as { code?: string }).code;
+    if (code === "23505" || code === "23514") return { error: "No se pudo cambiar a ese precio. Recarga e inténtalo de nuevo." };
+    throw err;
+  }
+  if (resultado) return { error: resultado };
 
   revalidatePath("/admin/precios");
+  revalidatePath("/admin/modelos");
   return { success: "Precio actualizado." };
 }
 

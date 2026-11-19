@@ -1,14 +1,15 @@
 -- Catálogo de modelos (etapa 1 de "inventario por modelo").
 --
--- Un modelo es el nombre completo de la prenda tal como lo usa el negocio, con su manga y color
--- (ej. "CAMISA CUADRO FRANELA ADULTO M/L (ROJO)"); manga larga y manga corta son modelos distintos.
--- Cada modelo dice qué tallas maneja (no todos tienen todas). La administración los da de alta a mano
--- y los puede descontinuar (dejan de ofrecerse, pero conservan su historial). Los modelos no se borran.
+-- Cada fila de `modelos` es lo que lleva UNA etiqueta y UN precio por sucursal: el modelo base
+-- (ej. "MAJA REPELENTE") más su variante ("MC", "ML", "ML 2XL-3XL"), un distintivo opcional (material o
+-- referente, ej. "PANA") y un color opcional. Si unas tallas cuestan más, se dan de alta como otra variante
+-- (con su propia etiqueta). Las filas con el mismo modelo base son variantes del mismo modelo.
 --
--- Etapas siguientes (no en este archivo): grupos de precio por rango de tallas, precio por sucursal,
--- etiqueta QR del Almacén por modelo y rango, inventario y venta por modelo. Esas tablas apuntarán a
--- (modelo, talla); por eso aquí las tallas de un modelo se agregan/quitan por diferencia y no se
--- reescriben, y nada se borra en cascada.
+-- Las tallas de cada fila son SOLO control interno de la administración y la gerente: no se usan en la
+-- venta ni en el conteo físico (la prenda ya trae su talla de fábrica y nuestra etiqueta va encima).
+--
+-- Etiqueta nueva: el QR lleva `qr_token` (corto, distinto de los UUID de `lotes`, para que el QR salga menos
+-- denso). Las etiquetas viejas (por precio, tabla `lotes`) siguen funcionando igual; esto no las toca.
 --
 -- Es una migración ADITIVA: solo crea tablas nuevas. No toca ninguna tabla ni dato existente, así que
 -- el sistema sigue funcionando igual si se corre antes del deploy. Es idempotente.
@@ -28,24 +29,36 @@ ON CONFLICT (nombre) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS modelos (
   id SERIAL PRIMARY KEY,
-  -- Como se muestra (en mayúsculas, espacios normalizados).
-  nombre TEXT NOT NULL CHECK (char_length(btrim(nombre)) BETWEEN 3 AND 120),
-  -- Para no duplicar: el nombre sin acentos, sin signos, en mayúsculas y con espacios únicos. Dos modelos
-  -- no pueden tener la misma clave ("Camisa  cuadro (rojo)" y "CAMISA CUADRO ROJO" son el mismo).
+  -- Partes del nombre (en mayúsculas, espacios normalizados). Las filas con el mismo nombre_base son
+  -- variantes del mismo modelo.
+  nombre_base TEXT NOT NULL CHECK (char_length(nombre_base) BETWEEN 3 AND 80),
+  variante TEXT CHECK (variante IS NULL OR char_length(variante) BETWEEN 1 AND 30),
+  distintivo TEXT CHECK (distintivo IS NULL OR char_length(distintivo) BETWEEN 1 AND 30),
+  color TEXT CHECK (color IS NULL OR char_length(color) BETWEEN 1 AND 30),
+  -- Nombre completo armado por la app con las partes: "MAJA REPELENTE MC PANA (ROJO)".
+  nombre TEXT NOT NULL CHECK (char_length(btrim(nombre)) BETWEEN 3 AND 200),
+  -- Para no duplicar: el nombre completo sin acentos, sin signos, en mayúsculas y con espacios únicos.
   nombre_clave TEXT NOT NULL UNIQUE CHECK (char_length(nombre_clave) >= 3),
-  -- Código corto opcional para buscarlo rápido (ej. CF-ML-ROJO).
+  -- Texto corto para la etiqueta, si la administración lo acorta. NULL = se arma solo con las partes.
+  texto_etiqueta TEXT CHECK (texto_etiqueta IS NULL OR char_length(texto_etiqueta) BETWEEN 3 AND 40),
+  -- Lo que lleva el QR de la etiqueta nueva. Corto y en mayúsculas (QR menos denso, se lee mejor chico).
+  qr_token TEXT NOT NULL UNIQUE DEFAULT ('WM-' || upper(substr(md5(gen_random_uuid()::text), 1, 12)))
+    CHECK (qr_token ~ '^WM-[0-9A-F]{12}$'),
+  -- Código corto opcional para buscarlo rápido (ej. MR-MC).
   codigo TEXT UNIQUE CHECK (codigo IS NULL OR codigo ~ '^[A-Z0-9-]{1,20}$'),
   activo BOOLEAN NOT NULL DEFAULT true,
-  creado_por INTEGER REFERENCES usuarios(id),
+  creado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
   creado_en TIMESTAMPTZ NOT NULL DEFAULT now(),
-  actualizado_por INTEGER REFERENCES usuarios(id),
+  actualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
   actualizado_en TIMESTAMPTZ NOT NULL DEFAULT now(),
   descontinuado_en TIMESTAMPTZ,
   CONSTRAINT modelo_descontinuado_coherente CHECK (activo = (descontinuado_en IS NULL))
 );
 
--- Qué tallas maneja cada modelo. Sin cascada: un modelo con tallas (y, más adelante, con precios e
--- inventario) no se puede borrar por accidente.
+CREATE INDEX IF NOT EXISTS modelos_nombre_base_idx ON modelos (nombre_base);
+
+-- Qué tallas maneja cada modelo (control interno, opcional). Sin cascada: un modelo con tallas (y, más
+-- adelante, con precios) no se puede borrar por accidente.
 CREATE TABLE IF NOT EXISTS modelo_tallas (
   modelo_id INTEGER NOT NULL REFERENCES modelos(id),
   talla_id INTEGER NOT NULL REFERENCES tallas(id),

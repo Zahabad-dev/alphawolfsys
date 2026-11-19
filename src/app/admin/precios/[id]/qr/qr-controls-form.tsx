@@ -10,6 +10,8 @@ export default function QrControlsForm({
   sizeCmMin,
   sizeCmMax,
   copiasMax,
+  extra,
+  mostrarOpcionLogo = true,
 }: {
   sizeCm: number;
   modo: "unico" | "hoja";
@@ -18,11 +20,18 @@ export default function QrControlsForm({
   sizeCmMin: number;
   sizeCmMax: number;
   copiasMax: number;
+  /** Otros parámetros de la página que deben conservarse al regenerar (ej. la sucursal elegida). */
+  extra?: Record<string, string>;
+  /** false = no se ofrece la casilla "Sin logo" (la etiqueta de modelo siempre va sin logo). */
+  mostrarOpcionLogo?: boolean;
 }) {
   const [modoSeleccionado, setModoSeleccionado] = useState<"unico" | "hoja">(modo);
 
   return (
     <form method="get" className="flex flex-wrap items-end gap-3 print:hidden">
+      {Object.entries(extra ?? {}).map(([k, v]) => (
+        <input key={k} type="hidden" name={k} value={v} />
+      ))}
       <label className="flex flex-col gap-1 text-sm text-black/70">
         Tamaño (cm)
         <input
@@ -49,10 +58,12 @@ export default function QrControlsForm({
         </select>
       </label>
 
-      <label className="flex items-center gap-2 pb-2 text-sm text-black/70">
-        <input type="checkbox" name="sin_logo" value="1" defaultChecked={sinLogo} />
-        Sin logo (recomendado en tamaños chicos)
-      </label>
+      {mostrarOpcionLogo && (
+        <label className="flex items-center gap-2 pb-2 text-sm text-black/70">
+          <input type="checkbox" name="sin_logo" value="1" defaultChecked={sinLogo} />
+          Sin logo (recomendado en tamaños chicos)
+        </label>
+      )}
 
       {modoSeleccionado === "hoja" && (
         <label className="flex flex-col gap-1 text-sm text-black/70">

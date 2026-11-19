@@ -6,7 +6,8 @@ interface LoteRow {
   qr_token: string;
   nombre: string;
   precio_mxn: string;
-  stock: number;
+  /** La vista stock_actual da un bigint: pg lo entrega como texto. */
+  stock: string | number;
 }
 
 export async function GET() {
@@ -36,12 +37,33 @@ export async function GET() {
     [user.sucursalId]
   );
 
+  // Etiquetas nuevas (por modelo): cada modelo con precio en esta sucursal apunta al lote propio con ese
+  // mismo precio (el mismo stock que sus etiquetas de precio). Si la base aún no tiene las tablas de
+  // modelos, el catálogo queda como siempre.
+  try {
+    const { rows: modelos } = await query<LoteRow>(
+      `SELECT m.qr_token, m.nombre, l.precio_mxn, COALESCE(sa.stock, 0) AS stock
+         FROM modelos m
+         JOIN precios_modelo pm ON pm.modelo_id = m.id AND pm.sucursal_id = $1 AND pm.vigente_hasta IS NULL
+         JOIN LATERAL (
+           SELECT id, precio_mxn FROM lotes
+            WHERE sucursal_id = $1 AND precio_mxn = pm.precio_mxn AND activo
+            ORDER BY id LIMIT 1
+         ) l ON true
+         LEFT JOIN stock_actual sa ON sa.lote_id = l.id`,
+      [user.sucursalId]
+    );
+    rows.push(...modelos);
+  } catch (err) {
+    if ((err as { code?: string }).code !== "42P01") throw err;
+  }
+
   return NextResponse.json({
     items: rows.map((r) => ({
       qrToken: r.qr_token,
       nombre: r.nombre,
       precio: Number(r.precio_mxn),
-      stock: r.stock,
+      stock: Number(r.stock),
     })),
   });
 }

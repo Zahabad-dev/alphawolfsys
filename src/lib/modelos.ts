@@ -4,9 +4,57 @@
  */
 
 export const NOMBRE_MODELO_MIN = 3;
-export const NOMBRE_MODELO_MAX = 120;
+export const NOMBRE_BASE_MAX = 80;
+export const PARTE_MAX = 30;
 export const CODIGO_MODELO_MAX = 20;
 export const TALLAS_POR_MODELO_MAX = 50;
+/** Texto de la etiqueta: hasta 30 cabe bien en 2 renglones de 2 cm; 40 es el tope. */
+export const TEXTO_ETIQUETA_RECOMENDADO = 30;
+export const TEXTO_ETIQUETA_MAX = 40;
+
+/**
+ * Se cambia a true en la etapa en que la venta lea las etiquetas nuevas. Mientras sea false, la pantalla
+ * de etiqueta es solo vista previa (sin botón de imprimir), para que nadie pegue etiquetas que no cobran.
+ */
+export const ETIQUETAS_NUEVAS_SE_COBRAN = true;
+
+/** Lo que lleva el QR de una etiqueta de modelo (las etiquetas de precio llevan un UUID). */
+export function esTokenModelo(token: string): boolean {
+  return /^WM-[0-9A-F]{12}$/.test(token);
+}
+
+export const NOTA_PRECIO_MAX = 200;
+
+/** Precio en pesos escrito por la persona ("350", "350.5", "$1,250.00") → número, o null si no es válido. */
+export function leerPrecio(texto: string): number | null {
+  const sinSigno = texto.replace(/[$\s]/g, "");
+  // La coma solo se acepta como separador de miles ("1,250"); "3,50" o "350,5" se rechazan.
+  if (sinSigno.includes(",") && !/^\d{1,3}(,\d{3})+(\.\d{1,2})?$/.test(sinSigno)) return null;
+  const limpio = sinSigno.replace(/,/g, "");
+  if (!/^\d{1,6}(\.\d{1,2})?$/.test(limpio)) return null;
+  const n = Number(limpio);
+  return n > 0 && n < 1_000_000 ? n : null;
+}
+
+export interface PartesModelo {
+  base: string;
+  variante: string;
+  distintivo: string;
+  color: string;
+}
+
+/** Nombre completo para el catálogo y los reportes: "MAJA REPELENTE MC PANA (ROJO)". */
+export function componerNombre(p: PartesModelo): string {
+  const color = limpiarNombreModelo(p.color).replace(/[()]/g, "").trim();
+  return limpiarNombreModelo(
+    [p.base, p.variante, p.distintivo].map(limpiarNombreModelo).filter(Boolean).join(" ") + (color ? ` (${color})` : "")
+  );
+}
+
+/** Texto que lleva la etiqueta si la administración no lo acorta: las partes, sin paréntesis. */
+export function textoEtiquetaAuto(p: PartesModelo): string {
+  return limpiarNombreModelo([p.base, p.variante, p.distintivo, p.color].join(" ").replace(/[()]/g, " "));
+}
 
 /** Caracteres invisibles o de control que no deben quedar en un nombre (se ven igual pero no lo son). */
 const INVISIBLES = /[\u0000-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g;

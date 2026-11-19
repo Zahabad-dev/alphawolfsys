@@ -5,19 +5,26 @@ import { query } from "@/lib/db";
 import Header from "@/components/Header";
 import AdminNav from "@/components/AdminNav";
 import { formatearFechaHora } from "@/lib/fechas";
-import { esAdmin } from "@/lib/permisos";
+import { esAdmin, puedeGestionar } from "@/lib/permisos";
 import { enteroPositivo } from "@/lib/historial";
-import { claveModelo } from "@/lib/modelos";
-import ModeloForm, { type TallaOpcion } from "./modelo-form";
+import { claveModelo, textoEtiquetaAuto } from "@/lib/modelos";
+import { dinero } from "@/lib/formato";
+import ModeloForm, { type Sugerencias, type TallaOpcion } from "./modelo-form";
 import { EstadoModeloForm, NuevaTallaForm, TallaFila } from "./estado-form";
 
 interface ModeloRow {
   id: number;
   nombre: string;
+  nombre_base: string;
+  variante: string | null;
+  distintivo: string | null;
+  color: string | null;
+  texto_etiqueta: string | null;
   codigo: string | null;
   activo: boolean;
   descontinuado_en: Date | string | null;
   tallas: number[];
+  precios: { clave: string; precio: string }[];
 }
 
 const FILTROS = [
@@ -30,12 +37,17 @@ async function cargar() {
   const [{ rows: tallas }, { rows: modelos }] = await Promise.all([
     query<TallaOpcion>("SELECT id, nombre, activa FROM tallas ORDER BY orden, id"),
     query<ModeloRow>(
-      `SELECT m.id, m.nombre, m.codigo, m.activo, m.descontinuado_en,
-              COALESCE(array_agg(mt.talla_id) FILTER (WHERE mt.talla_id IS NOT NULL), '{}') AS tallas
+      `SELECT m.id, m.nombre, m.nombre_base, m.variante, m.distintivo, m.color, m.texto_etiqueta,
+              m.codigo, m.activo, m.descontinuado_en,
+              COALESCE(array_agg(mt.talla_id) FILTER (WHERE mt.talla_id IS NOT NULL), '{}') AS tallas,
+              COALESCE((SELECT json_agg(json_build_object('clave', s.clave, 'precio', pm.precio_mxn::text)
+                                        ORDER BY s.tipo = 'almacen' DESC, s.nombre)
+                          FROM precios_modelo pm JOIN sucursales s ON s.id = pm.sucursal_id
+                         WHERE pm.modelo_id = m.id AND pm.vigente_hasta IS NULL), '[]') AS precios
        FROM modelos m
        LEFT JOIN modelo_tallas mt ON mt.modelo_id = m.id
        GROUP BY m.id
-       ORDER BY m.nombre`
+       ORDER BY m.nombre_base, m.nombre`
     ),
   ]);
   return { tallas, modelos };
@@ -49,6 +61,7 @@ export default async function AdminModelosPage({
   const session = await auth();
   if (!session || session.user.rol === "vendedor") redirect("/login");
   const admin = esAdmin(session.user.rol);
+  const puedeCambiarPrecios = puedeGestionar(session.user.rol);
 
   const sp = await searchParams;
   const texto = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : "");
@@ -60,7 +73,7 @@ export default async function AdminModelosPage({
   try {
     datos = await cargar();
   } catch (err) {
-    // 42P01 = la tabla no existe: falta correr sql/014_catalogo_modelos.sql en esta base.
+    // 42P01 = la tabla no existe: faltan sql/014_catalogo_modelos.sql y sql/015_precios_modelo.sql en esta base.
     if ((err as { code?: string }).code !== "42P01") throw err;
     return (
       <div className="flex min-h-screen flex-col">
@@ -68,8 +81,8 @@ export default async function AdminModelosPage({
         <AdminNav />
         <main className="p-4 sm:p-6">
           <p className="rounded-2xl border border-yellow-500/40 bg-yellow-500/10 p-4 text-sm text-brand-cream">
-            Falta preparar la base de datos para esta pantalla (la migración <code>014_catalogo_modelos.sql</code>
-            ). Avisa a soporte; el resto del sistema no se ve afectado.
+            Falta preparar la base de datos para esta pantalla (las migraciones <code>014_catalogo_modelos.sql</code> y{" "}
+            <code>015_precios_modelo.sql</code>). Avisa a soporte; el resto del sistema no se ve afectado.
           </p>
         </main>
       </div>
@@ -79,6 +92,15 @@ export default async function AdminModelosPage({
   const nombreTalla = new Map(tallas.map((t) => [t.id, t.nombre]));
   const ordenTalla = new Map(tallas.map((t, i) => [t.id, i]));
   const catalogo = modelos.map((m) => ({ id: m.id, nombre: m.nombre }));
+  const distintos = (xs: (string | null)[]) => [...new Set(xs.filter((x): x is string => !!x))].sort();
+  const sugerencias: Sugerencias = {
+    bases: distintos(modelos.map((m) => m.nombre_base)),
+    variantes: distintos(["MC", "ML", ...modelos.map((m) => m.variante)]),
+    distintivos: distintos(modelos.map((m) => m.distintivo)),
+    colores: distintos(modelos.map((m) => m.color)),
+  };
+  const partes = (m: ModeloRow) => ({ base: m.nombre_base, variante: m.variante ?? "", distintivo: m.distintivo ?? "", color: m.color ?? "" });
+  const textoEtiqueta = (m: ModeloRow) => m.texto_etiqueta ?? textoEtiquetaAuto(partes(m));
   const editando = editarId ? modelos.find((m) => m.id === editarId) : undefined;
 
   const activos = modelos.filter((m) => m.activo).length;
@@ -109,7 +131,7 @@ export default async function AdminModelosPage({
         {admin ? (
           <section className="flex flex-col gap-2">
             <h2 className="text-base font-semibold text-brand-cream">
-              {editando ? `Editar: ${editando.nombre}` : "Dar de alta un modelo"}
+              {editando ? `Editar: ${editando.nombre}` : "Dar de alta un modelo o variante"}
             </h2>
             {editarId > 0 && !editando && (
               <p className="rounded-xl border border-yellow-500/40 bg-yellow-500/10 p-3 text-sm text-brand-cream">
@@ -117,15 +139,28 @@ export default async function AdminModelosPage({
               </p>
             )}
             <p className="text-sm text-brand-cream/70">
-              Escribe el nombre completo como lo usan en tienda, con su manga y color. Manga larga y manga corta son
-              modelos distintos.
+              Cada alta es lo que lleva una etiqueta y un precio. Para la manga corta y la larga de un mismo modelo, escribe
+              el mismo modelo y cambia la variante (MC, ML). Si unas tallas cuestan más, dalas de alta como otra variante
+              (ej. ML 2XL-3XL).
             </p>
             <ModeloForm
               key={editando?.id ?? "nuevo"}
               tallas={tallas}
               catalogo={catalogo}
+              sugerencias={sugerencias}
               volver={url({})}
-              modelo={editando ? { id: editando.id, nombre: editando.nombre, codigo: editando.codigo, tallas: editando.tallas } : undefined}
+              modelo={
+                editando
+                  ? {
+                      id: editando.id,
+                      nombre: editando.nombre,
+                      ...partes(editando),
+                      textoEtiqueta: editando.texto_etiqueta ?? "",
+                      codigo: editando.codigo,
+                      tallas: editando.tallas,
+                    }
+                  : undefined
+              }
             />
           </section>
         ) : (
@@ -180,6 +215,8 @@ export default async function AdminModelosPage({
               <thead className="bg-brand-gray2 text-brand-cream/70">
                 <tr>
                   <th scope="col" className="px-4 py-2">Modelo</th>
+                  <th scope="col" className="px-4 py-2">Precios</th>
+                  <th scope="col" className="px-4 py-2">Etiqueta</th>
                   <th scope="col" className="px-4 py-2">Tallas</th>
                   <th scope="col" className="px-4 py-2">Estado</th>
                   {admin && (
@@ -195,6 +232,32 @@ export default async function AdminModelosPage({
                     <td className="px-4 py-2">
                       <span className="font-semibold text-brand-cream">{m.nombre}</span>
                       {m.codigo && <span className="block text-xs text-brand-cream/70">Código {m.codigo}</span>}
+                    </td>
+                    <td className="px-4 py-2">
+                      {m.precios.length ? (
+                        <span className="block text-xs text-brand-cream/90">
+                          {m.precios.map((p) => `${p.clave} ${dinero(Number(p.precio))}`).join(" · ")}
+                        </span>
+                      ) : (
+                        <span className="block text-xs text-brand-cream/70">sin precio</span>
+                      )}
+                      <Link
+                        href={`/admin/modelos/${m.id}/precios`}
+                        aria-label={`Precios de ${m.nombre}`}
+                        className="text-xs text-brand-cream/70 underline hover:text-brand-gold"
+                      >
+                        {admin || puedeCambiarPrecios ? "Poner precios" : "Ver precios"}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-2">
+                      <span className="block text-xs text-brand-cream/90">{textoEtiqueta(m)}</span>
+                      <Link
+                        href={`/admin/modelos/${m.id}/etiqueta`}
+                        aria-label={`Ver etiqueta de ${m.nombre}`}
+                        className="text-xs text-brand-cream/70 underline hover:text-brand-gold"
+                      >
+                        Ver etiqueta
+                      </Link>
                     </td>
                     <td className="px-4 py-2">
                       <div className="flex flex-wrap gap-1">
@@ -235,7 +298,7 @@ export default async function AdminModelosPage({
                 ))}
                 {visibles.length === 0 && (
                   <tr>
-                    <td colSpan={admin ? 4 : 3} className="px-4 py-6 text-center text-brand-cream/70">
+                    <td colSpan={admin ? 6 : 5} className="px-4 py-6 text-center text-brand-cream/70">
                       {modelos.length === 0 ? "Todavía no hay modelos. Da de alta el primero arriba." : "Ningún modelo coincide con la búsqueda."}
                     </td>
                   </tr>

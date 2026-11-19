@@ -5,6 +5,9 @@ import { query, withTransaction } from "@/lib/db";
 import { verificarUmbralYNotificar } from "@/lib/push";
 import { esMotivoSalida, NOTA_SALIDA_MAX, type MotivoSalida } from "@/lib/motivos-salida";
 import { SALIDAS_HABILITADAS } from "@/lib/funciones";
+import { esTokenModelo } from "@/lib/modelos";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface LoteRow {
   id: number;
@@ -23,7 +26,11 @@ interface LoteRow {
 async function resolverLotePropio(
   qrToken: string,
   sucursalId: number
-): Promise<{ lote: LoteRow } | { error: string }> {
+): Promise<{ lote: LoteRow; modeloId: number | null } | { error: string }> {
+  if (esTokenModelo(qrToken)) return resolverEtiquetaModelo(qrToken, sucursalId);
+  // Las etiquetas de precio llevan un UUID; cualquier otra cosa no es una etiqueta del sistema.
+  if (!UUID_RE.test(qrToken)) return { error: "Precio no encontrado o inactivo." };
+
   const { rows: loteRows } = await query<LoteRow>(
     "SELECT id, precio_mxn, sucursal_id, activo FROM lotes WHERE qr_token = $1",
     [qrToken]
@@ -32,7 +39,7 @@ async function resolverLotePropio(
   if (!escaneado || !escaneado.activo) {
     return { error: "Precio no encontrado o inactivo." };
   }
-  if (escaneado.sucursal_id === sucursalId) return { lote: escaneado };
+  if (escaneado.sucursal_id === sucursalId) return { lote: escaneado, modeloId: null };
 
   const { rows: propioRows } = await query<LoteRow>(
     "SELECT id, precio_mxn, sucursal_id, activo FROM lotes WHERE precio_mxn = $1 AND sucursal_id = $2",
@@ -42,7 +49,58 @@ async function resolverLotePropio(
   if (!propio || !propio.activo) {
     return { error: "Este precio no está dado de alta en tu sucursal." };
   }
-  return { lote: propio };
+  return { lote: propio, modeloId: null };
+}
+
+/**
+ * Etiqueta nueva (por modelo): se cobra el precio que ese modelo tiene en la sucursal de la vendedora, y la
+ * pieza sale del lote de esa sucursal con ese mismo precio. Así el inventario y los cortes se cuentan igual
+ * que con las etiquetas de precio; además queda anotado qué modelo se vendió.
+ */
+async function resolverEtiquetaModelo(
+  qrToken: string,
+  sucursalId: number
+): Promise<{ lote: LoteRow; modeloId: number } | { error: string }> {
+  let rows: (Partial<LoteRow> & { modelo_id: number; precio_modelo: string | null })[];
+  try {
+    ({ rows } = await query(
+      `SELECT m.id AS modelo_id, pm.precio_mxn AS precio_modelo,
+              l.id, l.precio_mxn, l.sucursal_id, l.activo
+         FROM modelos m
+         LEFT JOIN precios_modelo pm
+                ON pm.modelo_id = m.id AND pm.sucursal_id = $2 AND pm.vigente_hasta IS NULL
+         LEFT JOIN lotes l
+                ON l.sucursal_id = $2 AND l.precio_mxn = pm.precio_mxn AND l.activo
+        WHERE m.qr_token = $1
+        ORDER BY l.id
+        LIMIT 1`,
+      [qrToken, sucursalId]
+    ));
+  } catch (err) {
+    // 42P01: esta base todavía no tiene las tablas de modelos.
+    if ((err as { code?: string }).code === "42P01") return { error: "Etiqueta no encontrada." };
+    throw err;
+  }
+  const r = rows[0];
+  if (!r) return { error: "Etiqueta no encontrada." };
+  if (r.precio_modelo === null) return { error: "Este modelo no tiene precio en tu sucursal. Avisa a la administración." };
+  if (!r.id) {
+    return {
+      error: `El precio de este modelo ($${Number(r.precio_modelo).toFixed(2)}) no está dado de alta en tu sucursal. Avisa a la administración.`,
+    };
+  }
+  return {
+    lote: { id: r.id, precio_mxn: r.precio_mxn!, sucursal_id: r.sucursal_id!, activo: true },
+    modeloId: r.modelo_id,
+  };
+}
+
+/** Columnas extra cuando la pieza se cobró con etiqueta de modelo (solo entonces se escribe modelo_id). */
+function conModelo(modeloId: number | null) {
+  // El id sale de la base (modelos.id), nunca de lo que manda el celular; aun así se valida como entero.
+  if (modeloId === null) return { col: "", val: "" };
+  if (!Number.isSafeInteger(modeloId) || modeloId <= 0) throw new Error("modelo_id inválido");
+  return { col: ", modelo_id", val: `, ${modeloId}` };
 }
 
 export interface RegistrarVentaResult {
@@ -74,25 +132,31 @@ export async function registrarVentaAction(input: {
   const resuelto = await resolverLotePropio(input.qrToken, user.sucursalId);
   if ("error" in resuelto) return { error: resuelto.error };
   const lote = resuelto.lote;
-
-  const { rows: stockRows } = await query<{ stock: string }>(
-    "SELECT stock FROM stock_actual WHERE lote_id = $1",
-    [lote.id]
-  );
-  const stockAntes = Number(stockRows[0]?.stock ?? 0);
-  if (input.cantidad > stockAntes) {
-    return { error: `Stock insuficiente: quedan ${stockAntes} piezas.` };
-  }
+  const mod = conModelo(resuelto.modeloId);
 
   const precio = Number(lote.precio_mxn);
 
+  let stockAntes: number;
   try {
-    await query(
-      `INSERT INTO movimientos_inventario
-         (lote_id, sucursal_id, tipo, cantidad, usuario_id, precio_unitario_mxn, idempotency_key)
-       VALUES ($1, $2, 'venta', $3, $4, $5, $6)`,
-      [lote.id, lote.sucursal_id, -input.cantidad, Number(user.id), precio, input.idempotencyKey]
-    );
+    // Se bloquea el lote: dos ventas a la vez del mismo precio se turnan y el stock no queda negativo.
+    const r = await withTransaction<{ error: string } | { stockAntes: number }>(async (client) => {
+      await client.query("SELECT id FROM lotes WHERE id = $1 FOR UPDATE", [lote.id]);
+      const { rows: stockRows } = await client.query<{ stock: string }>(
+        "SELECT stock FROM stock_actual WHERE lote_id = $1",
+        [lote.id]
+      );
+      const antes = Number(stockRows[0]?.stock ?? 0);
+      if (input.cantidad > antes) return { error: `Stock insuficiente: quedan ${antes} piezas.` };
+      await client.query(
+        `INSERT INTO movimientos_inventario
+           (lote_id, sucursal_id, tipo, cantidad, usuario_id, precio_unitario_mxn, idempotency_key${mod.col})
+         VALUES ($1, $2, 'venta', $3, $4, $5, $6${mod.val})`,
+        [lote.id, lote.sucursal_id, -input.cantidad, Number(user.id), precio, input.idempotencyKey]
+      );
+      return { stockAntes: antes };
+    });
+    if ("error" in r) return { error: r.error };
+    stockAntes = r.stockAntes;
   } catch (err) {
     const pgError = err as { code?: string };
     if (pgError.code === "23505") {
@@ -102,7 +166,11 @@ export async function registrarVentaAction(input: {
     throw err;
   }
 
-  await verificarUmbralYNotificar(lote.id, stockAntes, stockAntes - input.cantidad);
+  try {
+    await verificarUmbralYNotificar(lote.id, stockAntes, stockAntes - input.cantidad);
+  } catch {
+    // La venta ya está confirmada: un fallo al avisar (push) no la tumba.
+  }
 
   return { success: { cantidad: input.cantidad, total: input.cantidad * precio } };
 }
@@ -112,7 +180,6 @@ export interface RegistrarCarritoResult {
   success?: { piezas: number; total: number };
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_LINEAS = 50;
 const MAX_PIEZAS_LINEA = 100000;
 
@@ -159,22 +226,31 @@ export async function registrarVentaCarritoAction(input: {
     }
   }
 
-  // Cada QR → lote de la sucursal del vendedor; líneas que caen en el mismo lote se suman.
-  const porLote = new Map<number, { lote: LoteRow; cantidad: number; idempotencyKey: string }>();
+  // Cada QR → lote de la sucursal del vendedor; líneas que caen en el mismo lote (y mismo modelo) se suman.
+  const porLote = new Map<string, { lote: LoteRow; modeloId: number | null; cantidad: number; idempotencyKey: string }>();
   for (const l of input.lineas) {
     const resuelto = await resolverLotePropio(l.qrToken, sucursalId);
     if ("error" in resuelto) return { error: resuelto.error };
-    const previo = porLote.get(resuelto.lote.id);
+    const clave = `${resuelto.lote.id}|${resuelto.modeloId ?? ""}`;
+    const previo = porLote.get(clave);
     if (previo) previo.cantidad += l.cantidad;
     else {
-      porLote.set(resuelto.lote.id, {
+      porLote.set(clave, {
         lote: resuelto.lote,
+        modeloId: resuelto.modeloId,
         cantidad: l.cantidad,
         idempotencyKey: l.idempotencyKey,
       });
     }
   }
   const lineas = [...porLote.values()].sort((a, b) => a.lote.id - b.lote.id);
+  // Piezas por lote (varias líneas de modelos distintos pueden salir del mismo lote).
+  const piezasPorLote = new Map<number, { lote: LoteRow; cantidad: number }>();
+  for (const l of lineas) {
+    const p = piezasPorLote.get(l.lote.id);
+    if (p) p.cantidad += l.cantidad;
+    else piezasPorLote.set(l.lote.id, { lote: l.lote, cantidad: l.cantidad });
+  }
   const piezas = lineas.reduce((s, l) => s + l.cantidad, 0);
   const total = lineas.reduce((s, l) => s + l.cantidad * Number(l.lote.precio_mxn), 0);
 
@@ -186,7 +262,7 @@ export async function registrarVentaCarritoAction(input: {
       // Bloquea los lotes (en orden de id, sin deadlocks): dos ventas simultáneas del
       // mismo precio se turnan, así el stock no puede quedar negativo por una carrera.
       await client.query("SELECT id FROM lotes WHERE id = ANY($1::int[]) ORDER BY id FOR UPDATE", [
-        lineas.map((l) => l.lote.id),
+        [...piezasPorLote.keys()],
       ]);
 
       const { rows: yaRegistrada } = await client.query(
@@ -196,7 +272,7 @@ export async function registrarVentaCarritoAction(input: {
       if (yaRegistrada.length > 0) return "duplicada";
 
       const stocks: { loteId: number; antes: number; despues: number }[] = [];
-      for (const l of lineas) {
+      for (const l of piezasPorLote.values()) {
         const { rows } = await client.query<{ stock: string }>(
           "SELECT stock FROM stock_actual WHERE lote_id = $1",
           [l.lote.id]
@@ -211,10 +287,11 @@ export async function registrarVentaCarritoAction(input: {
       }
 
       for (const l of lineas) {
+        const mod = conModelo(l.modeloId);
         await client.query(
           `INSERT INTO movimientos_inventario
-             (lote_id, sucursal_id, tipo, cantidad, usuario_id, precio_unitario_mxn, idempotency_key, venta_id)
-           VALUES ($1, $2, 'venta', $3, $4, $5, $6, $7)`,
+             (lote_id, sucursal_id, tipo, cantidad, usuario_id, precio_unitario_mxn, idempotency_key, venta_id${mod.col})
+           VALUES ($1, $2, 'venta', $3, $4, $5, $6, $7${mod.val})`,
           [
             l.lote.id,
             l.lote.sucursal_id,
@@ -298,6 +375,7 @@ export async function registrarSalidaAction(input: {
   const resuelto = await resolverLotePropio(input.qrToken, user.sucursalId);
   if ("error" in resuelto) return { error: resuelto.error };
   const lote = resuelto.lote;
+  const mod = conModelo(resuelto.modeloId);
   const precio = Number(lote.precio_mxn);
   const motivo = input.motivo;
 
@@ -323,8 +401,8 @@ export async function registrarSalidaAction(input: {
 
     await client.query(
       `INSERT INTO movimientos_inventario
-         (lote_id, sucursal_id, tipo, cantidad, usuario_id, precio_unitario_mxn, nota, idempotency_key, motivo)
-       VALUES ($1, $2, 'salida', $3, $4, $5, $6, $7, $8)`,
+         (lote_id, sucursal_id, tipo, cantidad, usuario_id, precio_unitario_mxn, nota, idempotency_key, motivo${mod.col})
+       VALUES ($1, $2, 'salida', $3, $4, $5, $6, $7, $8${mod.val})`,
       [
         lote.id,
         lote.sucursal_id,

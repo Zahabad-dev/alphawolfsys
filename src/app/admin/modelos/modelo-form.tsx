@@ -2,7 +2,19 @@
 
 import { startTransition, useActionState, useMemo, useState } from "react";
 import Link from "next/link";
-import { CODIGO_MODELO_MAX, NOMBRE_MODELO_MAX, claveModelo, limpiarNombreModelo, modelosParecidos, nombreSuficiente } from "@/lib/modelos";
+import {
+  CODIGO_MODELO_MAX,
+  NOMBRE_BASE_MAX,
+  PARTE_MAX,
+  TEXTO_ETIQUETA_MAX,
+  TEXTO_ETIQUETA_RECOMENDADO,
+  claveModelo,
+  componerNombre,
+  limpiarNombreModelo,
+  modelosParecidos,
+  nombreSuficiente,
+  textoEtiquetaAuto,
+} from "@/lib/modelos";
 import { crearModeloAction, editarModeloAction, type ModeloResult } from "./actions";
 
 const foco = "focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:outline-none";
@@ -11,8 +23,22 @@ const campo = `rounded-lg border border-white/10 bg-brand-black px-3 py-2 text-s
 export interface ModeloEditable {
   id: number;
   nombre: string;
+  base: string;
+  variante: string;
+  distintivo: string;
+  color: string;
+  /** Vacío = se usa el texto automático. */
+  textoEtiqueta: string;
   codigo: string | null;
   tallas: number[];
+}
+
+/** Lo que ya se usa en el catálogo, para sugerirlo al escribir (y no terminar con "PANA", "Pana" y "PANNA"). */
+export interface Sugerencias {
+  bases: string[];
+  variantes: string[];
+  distintivos: string[];
+  colores: string[];
 }
 
 export interface TallaOpcion {
@@ -28,6 +54,7 @@ export interface TallaOpcion {
 export default function ModeloForm({
   tallas,
   catalogo,
+  sugerencias,
   modelo,
   volver,
 }: {
@@ -35,13 +62,21 @@ export default function ModeloForm({
   tallas: TallaOpcion[];
   /** Todos los modelos (id y nombre), para avisar en vivo si el nombre se parece a uno existente. */
   catalogo: { id: number; nombre: string }[];
+  sugerencias: Sugerencias;
   /** Si viene, el formulario edita ese modelo; si no, da de alta uno nuevo. */
   modelo?: ModeloEditable;
   /** A dónde regresa "Cancelar" (la lista con sus filtros). */
   volver: string;
 }) {
   const editando = !!modelo;
-  const [nombre, setNombre] = useState(modelo?.nombre ?? "");
+  const [base, setBase] = useState(modelo?.base ?? "");
+  const [variante, setVariante] = useState(modelo?.variante ?? "");
+  const [distintivo, setDistintivo] = useState(modelo?.distintivo ?? "");
+  const [color, setColor] = useState(modelo?.color ?? "");
+  const [texto, setTexto] = useState(modelo?.textoEtiqueta ?? "");
+  const nombre = componerNombre({ base, variante, distintivo, color });
+  const textoAuto = textoEtiquetaAuto({ base, variante, distintivo, color });
+  const textoFinal = limpiarNombreModelo(texto) || textoAuto;
   const [codigo, setCodigo] = useState(modelo?.codigo ?? "");
   const [elegidas, setElegidas] = useState<number[]>(modelo?.tallas ?? []);
   const [confirmado, setConfirmado] = useState(false);
@@ -62,7 +97,11 @@ export default function ModeloForm({
         startTransition(() => {
           setCambiadoTrasEnvio(false);
           if (r.success && !editando) {
-            setNombre("");
+            // Se conserva el modelo base para dar de alta su siguiente variante más rápido.
+            setVariante("");
+            setDistintivo("");
+            setColor("");
+            setTexto("");
             setCodigo("");
             setElegidas([]);
             setConfirmado(false);
@@ -86,8 +125,8 @@ export default function ModeloForm({
     state?.parecidos && state.nombreEnviado === limpiarNombreModelo(nombre) ? state.parecidos : [];
   const avisos = [...new Set([...parecidosPantalla, ...parecidosServidor])];
   const faltan: string[] = [];
-  if (!nombreSuficiente(nombre)) faltan.push("el nombre del modelo");
-  if (!elegidas.length) faltan.push("al menos una talla");
+  if (!nombreSuficiente(base)) faltan.push("el nombre del modelo");
+  if (textoFinal.length > TEXTO_ETIQUETA_MAX) faltan.push(`acortar el texto de la etiqueta (máximo ${TEXTO_ETIQUETA_MAX})`);
   if (avisos.length && !confirmado) faltan.push("confirmar que no es un modelo repetido");
   const visibles = tallas.filter((t) => t.activa || elegidas.includes(t.id));
   const enOrden = (ids: number[]) => tallas.filter((t) => ids.includes(t.id)).map((t) => t.id);
@@ -101,26 +140,68 @@ export default function ModeloForm({
       ))}
       <input type="hidden" name="confirmado" value={confirmado ? "1" : ""} />
 
+      <datalist id="sug-bases">{sugerencias.bases.map((x) => <option key={x} value={x} />)}</datalist>
+      <datalist id="sug-variantes">{sugerencias.variantes.map((x) => <option key={x} value={x} />)}</datalist>
+      <datalist id="sug-distintivos">{sugerencias.distintivos.map((x) => <option key={x} value={x} />)}</datalist>
+      <datalist id="sug-colores">{sugerencias.colores.map((x) => <option key={x} value={x} />)}</datalist>
+
       <div className="flex flex-wrap gap-3">
         <label className="flex min-w-64 flex-[3] flex-col gap-1 text-xs text-brand-cream/70">
-          Nombre completo del modelo (con manga y color)
+          Modelo
           <input
-            name="nombre"
+            name="base"
             type="text"
             required
-            maxLength={NOMBRE_MODELO_MAX}
-            value={nombre}
-            onChange={(e) =>
-              cambia(() => {
-                setNombre(e.target.value);
-                setConfirmado(false);
-              })
-            }
-            placeholder="Ej. CAMISA CUADRO FRANELA ADULTO M/L (ROJO)"
+            list="sug-bases"
+            maxLength={NOMBRE_BASE_MAX}
+            value={base}
+            onChange={(e) => cambia(() => { setBase(e.target.value); setConfirmado(false); })}
+            placeholder="Ej. MAJA REPELENTE"
             className={`${campo} uppercase placeholder:normal-case`}
           />
         </label>
-        <label className="flex min-w-40 flex-1 flex-col gap-1 text-xs text-brand-cream/70">
+        <label className="flex min-w-36 flex-1 flex-col gap-1 text-xs text-brand-cream/70">
+          Variante (opcional)
+          <input
+            name="variante"
+            type="text"
+            list="sug-variantes"
+            maxLength={PARTE_MAX}
+            value={variante}
+            onChange={(e) => cambia(() => { setVariante(e.target.value); setConfirmado(false); })}
+            placeholder="Ej. MC, ML, ML 2XL-3XL"
+            className={`${campo} uppercase placeholder:normal-case`}
+          />
+        </label>
+      </div>
+      <div className="flex flex-wrap gap-3">
+        <label className="flex min-w-36 flex-1 flex-col gap-1 text-xs text-brand-cream/70">
+          Distintivo (opcional)
+          <input
+            name="distintivo"
+            type="text"
+            list="sug-distintivos"
+            maxLength={PARTE_MAX}
+            value={distintivo}
+            onChange={(e) => cambia(() => { setDistintivo(e.target.value); setConfirmado(false); })}
+            placeholder="Material o referente, ej. PANA"
+            className={`${campo} uppercase placeholder:normal-case`}
+          />
+        </label>
+        <label className="flex min-w-36 flex-1 flex-col gap-1 text-xs text-brand-cream/70">
+          Color (opcional)
+          <input
+            name="color"
+            type="text"
+            list="sug-colores"
+            maxLength={PARTE_MAX}
+            value={color}
+            onChange={(e) => cambia(() => { setColor(e.target.value); setConfirmado(false); })}
+            placeholder="Ej. ROJO"
+            className={`${campo} uppercase placeholder:normal-case`}
+          />
+        </label>
+        <label className="flex min-w-36 flex-1 flex-col gap-1 text-xs text-brand-cream/70">
           Código (opcional)
           <input
             name="codigo"
@@ -128,14 +209,59 @@ export default function ModeloForm({
             maxLength={CODIGO_MODELO_MAX}
             value={codigo}
             onChange={(e) => cambia(() => setCodigo(e.target.value))}
-            placeholder="Ej. CF-ML-ROJO"
+            placeholder="Ej. MR-MC"
             className={`${campo} uppercase placeholder:normal-case`}
           />
         </label>
       </div>
 
+      <p className="text-sm text-brand-cream/80">
+        Nombre completo: <span className="font-semibold text-brand-cream">{nombreSuficiente(base) ? nombre : "—"}</span>
+      </p>
+
+      <div className="flex flex-wrap items-start gap-4">
+        <label className="flex min-w-64 flex-[3] flex-col gap-1 text-xs text-brand-cream/70">
+          Texto de la etiqueta (déjalo vacío para usar el nombre; acórtalo si es muy largo)
+          <input
+            name="texto_etiqueta"
+            type="text"
+            maxLength={TEXTO_ETIQUETA_MAX + 20}
+            value={texto}
+            onChange={(e) => cambia(() => setTexto(e.target.value))}
+            placeholder={textoAuto || "Ej. CAM. CUADRO FRANELA ML PANA ROJO"}
+            aria-describedby="contador-etiqueta"
+            className={`${campo} uppercase placeholder:normal-case`}
+          />
+          <span
+            id="contador-etiqueta"
+            className={
+              textoFinal.length > TEXTO_ETIQUETA_MAX
+                ? "text-brand-red"
+                : textoFinal.length > TEXTO_ETIQUETA_RECOMENDADO
+                  ? "text-yellow-500"
+                  : "text-brand-cream/70"
+            }
+          >
+            {textoFinal.length} letras
+            {textoFinal.length > TEXTO_ETIQUETA_MAX
+              ? ` — máximo ${TEXTO_ETIQUETA_MAX}, acórtalo.`
+              : textoFinal.length > TEXTO_ETIQUETA_RECOMENDADO
+                ? ` — saldrá con letra chica; mejor acórtalo a ${TEXTO_ETIQUETA_RECOMENDADO} o menos.`
+                : " — cabe bien en la etiqueta."}
+          </span>
+        </label>
+        <div aria-hidden className="w-28 rounded-lg bg-white p-2 text-center text-black">
+          <div className="mx-auto mb-1 grid h-16 w-16 place-items-center rounded border-2 border-purple-700 text-[10px] text-black/50">
+            QR
+          </div>
+          <p className={`font-bold leading-tight ${textoFinal.length > TEXTO_ETIQUETA_RECOMENDADO ? "text-[8px]" : "text-[10px]"}`}>
+            {nombreSuficiente(base) ? textoFinal : "MODELO"}
+          </p>
+        </div>
+      </div>
+
       <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 text-xs text-brand-cream/70">Tallas que maneja</legend>
+        <legend className="mb-1 text-xs text-brand-cream/70">Tallas que maneja (opcional; solo control interno, no se usan en la venta)</legend>
         <div className="flex flex-wrap gap-2">
           {visibles.map((t) => {
             const activa = elegidas.includes(t.id);

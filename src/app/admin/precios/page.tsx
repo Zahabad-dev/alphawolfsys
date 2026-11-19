@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
@@ -10,6 +11,11 @@ import AsignarPrecioForm from "./asignar-precio-form";
 import EditarPrecioForm from "./editar-precio-form";
 import EliminarPrecioForm from "./eliminar-precio-form";
 import { togglePrecioActivoAction } from "./actions";
+import ModelosDelPrecio, {
+  CatalogoSucursal,
+  type ModeloCatalogo,
+  type ModeloDelPrecio,
+} from "./modelos-del-precio";
 
 interface PrecioRow {
   id: number;
@@ -19,6 +25,37 @@ interface PrecioRow {
   sucursal_nombre: string;
   sucursal_clave: string;
   sucursal_tipo: string;
+}
+
+interface PrecioModeloRow {
+  modelo_id: number;
+  nombre: string;
+  sucursal_id: number;
+  precio_mxn: string;
+}
+
+/**
+ * Modelos con su precio vigente en cada sucursal. Si la base aún no tiene las tablas de modelos
+ * (migraciones 014/015 sin correr), Precios funciona igual que siempre, sin esa parte.
+ */
+async function cargarModelos() {
+  try {
+    const [{ rows: vigentes }, { rows: catalogo }] = await Promise.all([
+      query<PrecioModeloRow>(
+        `SELECT pm.modelo_id, m.nombre, pm.sucursal_id, pm.precio_mxn
+           FROM precios_modelo pm JOIN modelos m ON m.id = pm.modelo_id
+          WHERE pm.vigente_hasta IS NULL
+          ORDER BY m.nombre`,
+      ),
+      query<{ id: number; nombre: string }>(
+        "SELECT id, nombre FROM modelos WHERE activo ORDER BY nombre",
+      ),
+    ]);
+    return { vigentes, catalogo };
+  } catch (err) {
+    if ((err as { code?: string }).code === "42P01") return null;
+    throw err;
+  }
 }
 
 interface SucursalRow {
@@ -37,12 +74,31 @@ export default async function AdminPreciosPage() {
       `SELECT l.id, l.precio_mxn, l.activo, s.id AS sucursal_id, s.nombre AS sucursal_nombre,
               s.clave AS sucursal_clave, s.tipo AS sucursal_tipo
        FROM lotes l JOIN sucursales s ON s.id = l.sucursal_id
-       ORDER BY s.tipo, s.nombre, l.precio_mxn`
+       ORDER BY s.tipo, s.nombre, l.precio_mxn`,
     ),
     query<SucursalRow>(
-      "SELECT id, nombre FROM sucursales WHERE activa = true AND tipo = 'sucursal' ORDER BY nombre"
+      "SELECT id, nombre FROM sucursales WHERE activa = true AND tipo = 'sucursal' ORDER BY nombre",
     ),
   ]);
+
+  const modelos = await cargarModelos();
+  const clavePrecio = (sucursalId: number, precio: number) =>
+    `${sucursalId}|${precio.toFixed(2)}`;
+  const modelosPorPrecio = new Map<string, ModeloDelPrecio[]>();
+  const precioDeModelo = new Map<string, number>(); // "modelo|sucursal" → precio vigente
+  for (const v of modelos?.vigentes ?? []) {
+    const k = clavePrecio(v.sucursal_id, Number(v.precio_mxn));
+    modelosPorPrecio.set(k, [
+      ...(modelosPorPrecio.get(k) ?? []),
+      { id: v.modelo_id, nombre: v.nombre },
+    ]);
+    precioDeModelo.set(`${v.modelo_id}|${v.sucursal_id}`, Number(v.precio_mxn));
+  }
+  const catalogoPara = (sucursalId: number): ModeloCatalogo[] =>
+    (modelos?.catalogo ?? []).map((m) => ({
+      ...m,
+      precioEnSucursal: precioDeModelo.get(`${m.id}|${sucursalId}`) ?? null,
+    }));
 
   const grupos = new Map<
     number,
@@ -65,17 +121,24 @@ export default async function AdminPreciosPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header titulo="Precios" subtitulo="El Almacén es el catálogo — de ahí se asignan a cada sucursal" />
+      <Header
+        titulo="Precios"
+        subtitulo="El Almacén es el catálogo — de ahí se asignan a cada sucursal"
+      />
       <AdminNav />
       <main className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
         {gestiona && <NuevoPrecioForm />}
 
         {preciosAlmacen.length === 0 ? (
           <p className="rounded-2xl border border-white/10 bg-brand-gray2 p-4 text-sm text-brand-cream/70">
-            Agrega al menos un precio al Almacén arriba antes de poder asignarlo a una sucursal.
+            Agrega al menos un precio al Almacén arriba antes de poder asignarlo
+            a una sucursal.
           </p>
         ) : (
-          <AsignarPrecioForm preciosAlmacen={preciosAlmacen} sucursales={sucursales} />
+          <AsignarPrecioForm
+            preciosAlmacen={preciosAlmacen}
+            sucursales={sucursales}
+          />
         )}
 
         {grupos.size === 0 && (
@@ -101,61 +164,101 @@ export default async function AdminPreciosPage() {
                   </span>
                 )}
                 <span className="ml-auto text-sm text-brand-cream/50">
-                  {grupo.precios.length} precio{grupo.precios.length !== 1 ? "s" : ""}
+                  {grupo.precios.length} precio
+                  {grupo.precios.length !== 1 ? "s" : ""}
                 </span>
               </summary>
 
               <div className="overflow-x-auto border-t border-white/10">
-                <table className="w-full text-left text-sm">
-                  <thead className="text-brand-cream/70">
-                    <tr>
-                      <th className="px-4 py-2">Precio</th>
-                      <th className="px-4 py-2">Estado</th>
-                      <th className="px-4 py-2">QR</th>
-                      <th className="px-4 py-2"></th>
-                      <th className="px-4 py-2"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {grupo.precios.map((p) => (
-                      <tr key={p.id} className="border-t border-white/10">
-                        <td className="px-4 py-2">
-                          <EditarPrecioForm id={p.id} precioActual={Number(p.precio_mxn)} />
-                        </td>
-                        <td className="px-4 py-2">
-                          {p.activo ? (
-                            <span className="text-brand-green">Activo</span>
-                          ) : (
-                            <span className="text-brand-cream/50">Inactivo</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-2">
-                          <Link
-                            href={`/admin/precios/${p.id}/qr`}
-                            className="text-brand-gold underline"
-                          >
-                            Ver / imprimir
-                          </Link>
-                        </td>
-                        <td className="px-4 py-2">
-                          <form action={togglePrecioActivoAction}>
-                            <input type="hidden" name="id" value={p.id} />
-                            <input type="hidden" name="activo" value={String(p.activo)} />
-                            <button
-                              type="submit"
-                              className="text-sm text-brand-cream/70 underline hover:text-brand-gold"
-                            >
-                              {p.activo ? "Desactivar" : "Activar"}
-                            </button>
-                          </form>
-                        </td>
-                        <td className="px-4 py-2">
-                          {gestiona && <EliminarPrecioForm id={p.id} />}
-                        </td>
+                <CatalogoSucursal
+                  sucursalId={grupo.precios[0].sucursal_id}
+                  catalogo={
+                    modelos ? catalogoPara(grupo.precios[0].sucursal_id) : []
+                  }
+                >
+                  <table className="w-full text-left text-sm">
+                    <thead className="text-brand-cream/70">
+                      <tr>
+                        <th className="px-4 py-2">Precio</th>
+                        <th className="px-4 py-2">Estado</th>
+                        <th className="px-4 py-2">QR</th>
+                        <th className="px-4 py-2"></th>
+                        <th className="px-4 py-2"></th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {grupo.precios.map((p) => (
+                        <Fragment key={p.id}>
+                          <tr className="border-t border-white/10">
+                            <td className="px-4 py-2">
+                              <EditarPrecioForm
+                                id={p.id}
+                                precioActual={Number(p.precio_mxn)}
+                              />
+                            </td>
+                            <td className="px-4 py-2">
+                              {p.activo ? (
+                                <span className="text-brand-green">Activo</span>
+                              ) : (
+                                <span className="text-brand-cream/50">
+                                  Inactivo
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-2">
+                              <Link
+                                href={`/admin/precios/${p.id}/qr`}
+                                className="text-brand-gold underline"
+                              >
+                                Ver / imprimir
+                              </Link>
+                            </td>
+                            <td className="px-4 py-2">
+                              <form action={togglePrecioActivoAction}>
+                                <input type="hidden" name="id" value={p.id} />
+                                <input
+                                  type="hidden"
+                                  name="activo"
+                                  value={String(p.activo)}
+                                />
+                                <button
+                                  type="submit"
+                                  className="text-sm text-brand-cream/70 underline hover:text-brand-gold"
+                                >
+                                  {p.activo ? "Desactivar" : "Activar"}
+                                </button>
+                              </form>
+                            </td>
+                            <td className="px-4 py-2">
+                              {gestiona && <EliminarPrecioForm id={p.id} />}
+                            </td>
+                          </tr>
+                          {modelos && (
+                            <tr>
+                              <td colSpan={5}>
+                                <ModelosDelPrecio
+                                  sucursalId={p.sucursal_id}
+                                  sucursal={p.sucursal_nombre}
+                                  precio={Number(p.precio_mxn)}
+                                  modelos={
+                                    modelosPorPrecio.get(
+                                      clavePrecio(
+                                        p.sucursal_id,
+                                        Number(p.precio_mxn),
+                                      ),
+                                    ) ?? []
+                                  }
+                                  gestiona={gestiona}
+                                  activo={p.activo}
+                                />
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      ))}
+                    </tbody>
+                  </table>
+                </CatalogoSucursal>
               </div>
             </details>
           ))}
