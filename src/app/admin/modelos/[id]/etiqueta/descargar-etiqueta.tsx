@@ -11,6 +11,16 @@ const INTERLINEADO = 1.05;
 const RENGLONES = 2;
 const cmAPx = (cm: number) => Math.round((cm / 2.54) * DPI);
 
+/** Carga una imagen (data: URL) sin depender de img.decode(), que algunas tabletas no tienen. */
+function cargarImagen(src: string): Promise<HTMLImageElement> {
+  return new Promise((ok, mal) => {
+    const img = new Image();
+    img.onload = () => ok(img);
+    img.onerror = () => mal(new Error("no cargó el QR"));
+    img.src = src;
+  });
+}
+
 /** Parte el texto en renglones que caben en `ancho` (si una palabra sola no cabe, se corta por letras). */
 function renglones(ctx: CanvasRenderingContext2D, texto: string, ancho: number): string[] {
   const lineas: string[] = [];
@@ -68,10 +78,13 @@ export default function DescargarEtiqueta({
       const lado = cmAPx(ladoCm);
       const ancho = cmAPx(ladoCm + 0.1);
       const margen = cmAPx(0.06);
-      await document.fonts.load(`700 ${cmAPx(LETRA_CM * escala)}px ${familiaLetra}`);
-      const img = new Image();
-      img.src = qrSrc;
-      await img.decode();
+      // Algunas tabletas no tienen document.fonts o rechazan la carga: se sigue con la letra que haya.
+      try {
+        await document.fonts?.load(`700 ${cmAPx(LETRA_CM * escala)}px ${familiaLetra}`);
+      } catch {
+        // se ignora a propósito
+      }
+      const img = await cargarImagen(qrSrc);
 
       const medir = document.createElement("canvas").getContext("2d")!;
       let tam = cmAPx(LETRA_CM * escala);
@@ -108,13 +121,23 @@ export default function DescargarEtiqueta({
         ctx.fillText(precio, canvas.width / 2, y);
       }
 
-      const url = canvas.toDataURL(tipo === "png" ? "image/png" : "image/jpeg", 0.95);
+      const mime = tipo === "png" ? "image/png" : "image/jpeg";
+      // Archivo (blob) en vez de data: URL: los navegadores de tableta/Android lo descargan mejor.
+      const blob = await new Promise<Blob | null>((ok) =>
+        canvas.toBlob ? canvas.toBlob(ok, mime, 0.95) : ok(null)
+      );
+      const url = blob ? URL.createObjectURL(blob) : canvas.toDataURL(mime, 0.95);
       const a = document.createElement("a");
       a.href = url;
       a.download = `${nombreArchivo}.${tipo}`;
+      a.rel = "noopener";
+      document.body.appendChild(a);
       a.click();
-    } catch {
-      setError("No se pudo generar la imagen. Inténtalo de nuevo.");
+      a.remove();
+      if (blob) setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) {
+      const detalle = e instanceof Error && e.message ? ` (${e.message})` : "";
+      setError(`No se pudo generar la imagen. Inténtalo de nuevo.${detalle}`);
     } finally {
       setOcupado(false);
     }
