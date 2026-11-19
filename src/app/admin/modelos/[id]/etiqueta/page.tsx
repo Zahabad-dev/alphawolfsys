@@ -11,6 +11,46 @@ import QrControlsForm from "@/app/admin/precios/[id]/qr/qr-controls-form";
 import PrintButton from "@/app/admin/precios/[id]/qr/print-button";
 import Etiquetas from "./etiquetas";
 import DescargarEtiqueta from "./descargar-etiqueta";
+import ConteoForm from "./conteo-form";
+import { conteoPorModelo } from "@/lib/conteo-modelos";
+import { puedeGestionar } from "@/lib/permisos";
+import { formatearFechaHora } from "@/lib/fechas";
+
+interface RegistroRow {
+  id: number;
+  tipo: string;
+  piezas: number;
+  nota: string | null;
+  creado_en: Date | string;
+  sucursal: string;
+  quien: string | null;
+}
+
+/** Últimos registros de piezas etiquetadas y ventas por sucursal del modelo (null si falta la migración 016). */
+async function cargarConteo(modeloId: number) {
+  const conteo = await conteoPorModelo(modeloId);
+  if (!conteo) return null;
+  const [{ rows: registros }, { rows: porSucursal }, { rows: sucursales }] = await Promise.all([
+    query<RegistroRow>(
+      `SELECT e.id, e.tipo, e.piezas, e.nota, e.creado_en, s.nombre AS sucursal, u.nombre AS quien
+         FROM entradas_modelo e JOIN sucursales s ON s.id = e.sucursal_id
+         LEFT JOIN usuarios u ON u.id = e.registrado_por
+        WHERE e.modelo_id = $1 ORDER BY e.creado_en DESC, e.id DESC LIMIT 10`,
+      [modeloId]
+    ),
+    query<{ sucursal: string; vendidas: string }>(
+      `SELECT s.nombre AS sucursal, -SUM(m.cantidad) AS vendidas
+         FROM movimientos_inventario m JOIN sucursales s ON s.id = m.sucursal_id
+        WHERE m.modelo_id = $1 AND m.tipo = 'venta'
+        GROUP BY s.nombre ORDER BY s.nombre`,
+      [modeloId]
+    ),
+    query<{ id: number; nombre: string; tipo: string }>(
+      "SELECT id, nombre, tipo FROM sucursales WHERE activa ORDER BY tipo = 'almacen' DESC, nombre"
+    ),
+  ]);
+  return { total: conteo.get(modeloId) ?? { entradas: 0, vendidas: 0, salidas: 0, existencia: 0 }, registros, porSucursal, sucursales };
+}
 
 // Letra angosta para que el nombre del modelo quepa en 2 renglones de una etiqueta de 2 cm.
 const condensada = Roboto_Condensed({ subsets: ["latin"], weight: "700", display: "block" });
@@ -54,6 +94,7 @@ export default async function EtiquetaModeloPage({
 }) {
   const session = await auth();
   if (!session || session.user.rol === "vendedor") redirect("/login");
+  const gestiona = puedeGestionar(session.user.rol);
 
   const id = enteroPositivo((await params).id);
   if (!id) notFound();
@@ -94,6 +135,8 @@ export default async function EtiquetaModeloPage({
   const copias = modo === "hoja" ? num(sp.copias, COPIAS_DEFAULT, 1, COPIAS_MAX) : 1;
   // Sin logo al centro: el QR queda más limpio y se lee mejor a 2 cm (pedido del cliente).
   const sinLogo = true;
+
+  const conteo = await cargarConteo(id);
 
   const sizePx = cmAPx(sizeCm);
   const qr = await generarQrConLogo(modelo.qr_token, sizePx, { sinLogo });
@@ -184,6 +227,78 @@ export default async function EtiquetaModeloPage({
           />
           <PrintButton />
         </>
+      )}
+
+      {conteo === null ? (
+        gestiona && (
+          <p className="w-full max-w-3xl rounded-xl border border-yellow-600/40 bg-yellow-100 p-3 text-sm print:hidden">
+            Para llevar el conteo de piezas por modelo falta preparar la base de datos (migración{" "}
+            <code>016_entradas_modelo.sql</code>). Lo demás funciona igual.
+          </p>
+        )
+      ) : (
+        <section className="flex w-full max-w-3xl flex-col gap-3 print:hidden">
+          <h2 className="text-base font-semibold">Conteo de este modelo (control interno)</h2>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {[
+              ["Etiquetadas", conteo.total.entradas],
+              ["Vendidas", conteo.total.vendidas],
+              ["Otras salidas", conteo.total.salidas],
+              ["Quedan", conteo.total.existencia],
+            ].map(([t, n]) => (
+              <div key={t} className={`rounded-xl border p-3 ${t === "Quedan" ? "border-black" : "border-black/10"}`}>
+                <p className="text-xs text-black/60">{t}</p>
+                <p className="text-2xl font-semibold">{n}</p>
+              </div>
+            ))}
+          </div>
+          {conteo.porSucursal.length > 0 && (
+            <p className="text-sm text-black/70">
+              Vendidas por sucursal: {conteo.porSucursal.map((v) => `${v.sucursal} ${Number(v.vendidas)}`).join(" · ")}
+            </p>
+          )}
+          <p className="text-xs text-black/60">
+            Solo cuentan las ventas hechas con esta etiqueta nueva; las prendas con etiqueta de precio no restan aquí.
+          </p>
+          {gestiona && conteo.sucursales.length > 0 && (
+            <ConteoForm
+              key={copias}
+              modeloId={id}
+              sucursales={conteo.sucursales}
+              sucursalInicial={conteo.sucursales.find((s) => s.tipo === "almacen")?.id ?? conteo.sucursales[0]?.id ?? 0}
+              copias={copias}
+            />
+          )}
+          {conteo.registros.length > 0 && (
+            <div className="overflow-x-auto rounded-xl border border-black/10">
+              <table className="w-full text-left text-sm">
+                <thead className="text-black/60">
+                  <tr>
+                    <th scope="col" className="px-3 py-2">Cuándo</th>
+                    <th scope="col" className="px-3 py-2">Piezas</th>
+                    <th scope="col" className="px-3 py-2">Dónde</th>
+                    <th scope="col" className="px-3 py-2">Quién</th>
+                    <th scope="col" className="px-3 py-2">Nota</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {conteo.registros.map((r) => (
+                    <tr key={r.id} className="border-t border-black/10">
+                      <td className="px-3 py-2">{formatearFechaHora(r.creado_en)}</td>
+                      <td className="px-3 py-2 font-semibold">
+                        {r.piezas > 0 ? `+${r.piezas}` : r.piezas}
+                        {r.tipo === "correccion" && <span className="ml-1 text-xs font-normal text-black/60">corrección</span>}
+                      </td>
+                      <td className="px-3 py-2">{r.sucursal}</td>
+                      <td className="px-3 py-2">{r.quien ?? "—"}</td>
+                      <td className="px-3 py-2 text-black/70">{r.nota ?? ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       )}
     </div>
   );

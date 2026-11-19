@@ -9,6 +9,7 @@ import { esAdmin, puedeGestionar } from "@/lib/permisos";
 import { enteroPositivo } from "@/lib/historial";
 import { claveModelo, textoEtiquetaAuto } from "@/lib/modelos";
 import { dinero } from "@/lib/formato";
+import { conteoPorModelo } from "@/lib/conteo-modelos";
 import ModeloForm, { type Sugerencias, type TallaOpcion } from "./modelo-form";
 import { EstadoModeloForm, NuevaTallaForm, TallaFila } from "./estado-form";
 
@@ -89,6 +90,8 @@ export default async function AdminModelosPage({
     );
   }
   const { tallas, modelos } = datos;
+  // Conteo interno por modelo (null si falta la migración 016: la columna simplemente no se muestra).
+  const conteo = await conteoPorModelo();
   const nombreTalla = new Map(tallas.map((t) => [t.id, t.nombre]));
   const ordenTalla = new Map(tallas.map((t, i) => [t.id, i]));
   const catalogo = modelos.map((m) => ({ id: m.id, nombre: m.nombre }));
@@ -217,6 +220,11 @@ export default async function AdminModelosPage({
                   <th scope="col" className="px-4 py-2">Modelo</th>
                   <th scope="col" className="px-4 py-2">Precios</th>
                   <th scope="col" className="px-4 py-2">Etiqueta</th>
+                  {conteo && (
+                    <th scope="col" className="px-4 py-2">
+                      Conteo
+                    </th>
+                  )}
                   <th scope="col" className="px-4 py-2">Tallas</th>
                   <th scope="col" className="px-4 py-2">Estado</th>
                   {admin && (
@@ -259,6 +267,23 @@ export default async function AdminModelosPage({
                         Ver etiqueta
                       </Link>
                     </td>
+                    {conteo && (
+                      <td className="whitespace-nowrap px-4 py-2">
+                        {(() => {
+                          const c = conteo.get(m.id);
+                          if (!c) return <span className="text-xs text-brand-cream/70">sin registrar</span>;
+                          return (
+                            <>
+                              <span className="block font-semibold text-brand-cream">Quedan {c.existencia}</span>
+                              <span className="block text-xs text-brand-cream/70">
+                                etiq. {c.entradas} · vend. {c.vendidas}
+                                {c.salidas ? ` · salidas ${c.salidas}` : ""}
+                              </span>
+                            </>
+                          );
+                        })()}
+                      </td>
+                    )}
                     <td className="px-4 py-2">
                       <div className="flex flex-wrap gap-1">
                         {[...m.tallas]
@@ -298,7 +323,7 @@ export default async function AdminModelosPage({
                 ))}
                 {visibles.length === 0 && (
                   <tr>
-                    <td colSpan={admin ? 6 : 5} className="px-4 py-6 text-center text-brand-cream/70">
+                    <td colSpan={(admin ? 6 : 5) + (conteo ? 1 : 0)} className="px-4 py-6 text-center text-brand-cream/70">
                       {modelos.length === 0 ? "Todavía no hay modelos. Da de alta el primero arriba." : "Ningún modelo coincide con la búsqueda."}
                     </td>
                   </tr>

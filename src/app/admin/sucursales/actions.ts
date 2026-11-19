@@ -184,6 +184,12 @@ export async function eliminarSucursalAction(
       if (tablaPrecios[0]?.existe) {
         await client.query("DELETE FROM precios_modelo WHERE sucursal_id = $1", [id]);
       }
+      const { rows: tablaEntradas } = await client.query<{ existe: boolean }>(
+        "SELECT to_regclass('public.entradas_modelo') IS NOT NULL AS existe"
+      );
+      if (tablaEntradas[0]?.existe) {
+        await client.query("DELETE FROM entradas_modelo WHERE sucursal_id = $1", [id]);
+      }
 
       // Borrar movimientos primero: liberan la referencia de usuario_id antes de
       // tocar a los vendedores (si no, "eliminar cuentas" siempre chocaba con su propio historial).
