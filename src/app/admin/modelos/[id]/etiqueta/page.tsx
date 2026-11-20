@@ -11,6 +11,7 @@ import QrControlsForm from "@/app/admin/precios/[id]/qr/qr-controls-form";
 import PrintButton from "@/app/admin/precios/[id]/qr/print-button";
 import Etiquetas from "./etiquetas";
 import DescargarEtiqueta from "./descargar-etiqueta";
+import ImprimirZendio from "./imprimir-zendio";
 import ConteoForm from "./conteo-form";
 import { conteoPorModelo } from "@/lib/conteo-modelos";
 import { puedeGestionar } from "@/lib/permisos";
@@ -226,6 +227,13 @@ export default async function EtiquetaModeloPage({
               .replace(/^-|-$/g, "")}
           />
           <PrintButton />
+          <ImprimirZendio
+            token={modelo.qr_token}
+            texto={texto}
+            precio={precio}
+            familiaLetra={condensada.style.fontFamily}
+            copiasIniciales={copias}
+          />
         </>
       )}
 
