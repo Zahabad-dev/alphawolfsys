@@ -314,7 +314,18 @@ interface DispositivoUsb {
 
 const nav = () => (typeof navigator === "undefined" ? {} : (navigator as unknown as NavegadorConBle));
 export const hayBluetooth = () => !!nav().bluetooth;
-export const hayUsb = () => !!nav().usb;
+/** Por cable solo en Android: en Windows el driver de la impresora la tiene apartada y Chrome no puede abrirla. */
+export const hayUsb = () => !!nav().usb && typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
+
+/** Traduce los errores del navegador a algo que se entienda en la tienda. */
+export function mensajeDeError(e: unknown): string {
+  const m = e instanceof Error ? e.message : "";
+  if (/Access denied|SecurityError|claimInterface/i.test(m))
+    return "No se pudo abrir la impresora por cable. En una PC con Windows usa Bluetooth o «Imprimir desde PC»; el cable es para tabletas Android.";
+  if (/GATT|disconnected|NetworkError|Bluetooth/i.test(m))
+    return "Se perdió la conexión Bluetooth con la impresora. Revisa que esté encendida y cerca, y vuelve a intentar.";
+  return m || "No se pudo imprimir.";
+}
 
 /** Servicios de impresión BLE comunes en impresoras térmicas chinas (Beeprt, Xprinter, etc.). */
 const SERVICIOS_BLE = [

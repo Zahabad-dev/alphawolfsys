@@ -14,6 +14,7 @@ import {
   hayUsb,
   imprimirPorPagina,
   leerAjustes,
+  mensajeDeError,
   normalizar,
   porLotes,
   unir,
@@ -104,7 +105,7 @@ function PanelZendio({ token, texto, precio, familiaLetra, copiasIniciales }: Pr
         }
       }
     } catch (e) {
-      setMensaje({ tipo: "error", texto: e instanceof Error && e.message ? e.message : "No se pudo imprimir." });
+      setMensaje({ tipo: "error", texto: mensajeDeError(e) });
     } finally {
       setAvance(null);
       setOcupado(false);
