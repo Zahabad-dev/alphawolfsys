@@ -4,6 +4,7 @@ import { query } from "@/lib/db";
 import Header from "@/components/Header";
 import AdminNav from "@/components/AdminNav";
 import TraspasoForm from "./traspaso-form";
+import TraspasoModeloForm, { type DatosTraspasoModelo } from "./traspaso-modelo-form";
 import { formatearFechaHora } from "@/lib/fechas";
 
 interface StockRow {
@@ -27,6 +28,37 @@ interface TraspasoRow {
   precio_mxn: string;
   usuario_nombre: string;
   nota: string | null;
+}
+
+/** Datos para el traspaso por modelo (null si la base aún no tiene las tablas de modelos). */
+async function cargarDatosModelo(): Promise<DatosTraspasoModelo | null> {
+  try {
+    const [{ rows: modelos }, { rows: precios }, { rows: sucursales }, { rows: stock }] = await Promise.all([
+      query<{ id: number; nombre: string }>("SELECT id, nombre FROM modelos WHERE activo ORDER BY nombre"),
+      query<{ modelo_id: number; sucursal_id: number; precio_mxn: string }>(
+        "SELECT modelo_id, sucursal_id, precio_mxn FROM precios_modelo WHERE vigente_hasta IS NULL"
+      ),
+      query<{ id: number; nombre: string; tipo: string }>(
+        "SELECT id, nombre, tipo FROM sucursales WHERE activa ORDER BY tipo = 'almacen' DESC, nombre"
+      ),
+      query<{ sucursal_id: number; precio_mxn: string; stock: string }>(
+        "SELECT sucursal_id, precio_mxn, SUM(stock) AS stock FROM stock_actual GROUP BY sucursal_id, precio_mxn"
+      ),
+    ]);
+    if (!modelos.length) return null;
+    const mapa: DatosTraspasoModelo["precios"] = {};
+    for (const p of precios) (mapa[p.modelo_id] ??= {})[p.sucursal_id] = Number(p.precio_mxn);
+    return {
+      modelos,
+      sucursales: sucursales.map((x) => ({ id: x.id, nombre: x.nombre, esAlmacen: x.tipo === "almacen" })),
+      precios: mapa,
+      stock: Object.fromEntries(stock.map((x) => [`${x.sucursal_id}|${Number(x.precio_mxn).toFixed(2)}`, Number(x.stock)])),
+    };
+  } catch (err) {
+    const code = (err as { code?: string }).code;
+    if (code === "42P01" || code === "42703") return null;
+    throw err;
+  }
 }
 
 export default async function AdminTraspasosPage() {
@@ -54,6 +86,8 @@ export default async function AdminTraspasosPage() {
     ),
   ]);
 
+  const datosModelo = await cargarDatosModelo();
+
   const origenes = stock.map((s) => ({
     id: s.lote_id,
     etiqueta: `${s.sucursal_nombre} — $${Number(s.precio_mxn).toFixed(2)}`,
@@ -65,6 +99,8 @@ export default async function AdminTraspasosPage() {
       <Header titulo="Traspasos" subtitulo="Entre fábrica y sucursales, en cualquier dirección" />
       <AdminNav />
       <main className="flex flex-1 flex-col gap-6 p-4 sm:p-6">
+        {datosModelo && <TraspasoModeloForm {...datosModelo} />}
+
         {origenes.length === 0 ? (
           <p className="rounded-2xl border border-white/10 bg-brand-gray2 p-4 text-sm text-brand-cream/70">
             Todavía no hay precios con stock para traspasar. Registra un{" "}
