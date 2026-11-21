@@ -7,7 +7,11 @@ export interface ConteoModelo {
   vendidas: number;
   /** Piezas que salieron sin ser venta (muestra, merma…) con la etiqueta de este modelo. */
   salidas: number;
-  /** entradas − vendidas − salidas. */
+  /**
+   * Lo que queda: entradas − lo vendido/salido DESDE la primera entrada registrada. Las ventas hechas antes de
+   * registrar entradas del modelo cuentan como vendidas, pero no restan (esas piezas venían del inventario por
+   * precio). Nunca es negativo, y no pide nada extra al personal.
+   */
   existencia: number;
 }
 
@@ -53,20 +57,29 @@ export async function modelosPorPrecio(): Promise<GrupoPrecio[] | null> {
  */
 export async function conteoPorModelo(modeloId?: number): Promise<Map<number, ConteoModelo> | null> {
   try {
-    const { rows } = await query<{ modelo_id: number; entradas: string; vendidas: string; salidas: string }>(
+    const { rows } = await query<{
+      modelo_id: number;
+      entradas: string;
+      vendidas: string;
+      salidas: string;
+      restan: string;
+    }>(
       `WITH e AS (
-         SELECT modelo_id, SUM(piezas) AS n FROM entradas_modelo
+         SELECT modelo_id, SUM(piezas) AS n, MIN(creado_en) AS primera FROM entradas_modelo
           WHERE ($1::int IS NULL OR modelo_id = $1) GROUP BY modelo_id
        ), m AS (
-         SELECT modelo_id,
-                -SUM(cantidad) FILTER (WHERE tipo = 'venta') AS vendidas,
-                -SUM(cantidad) FILTER (WHERE tipo = 'salida') AS salidas
-           FROM movimientos_inventario
-          WHERE modelo_id IS NOT NULL AND ($1::int IS NULL OR modelo_id = $1)
-          GROUP BY modelo_id
+         SELECT mi.modelo_id,
+                -SUM(mi.cantidad) FILTER (WHERE mi.tipo = 'venta') AS vendidas,
+                -SUM(mi.cantidad) FILTER (WHERE mi.tipo = 'salida') AS salidas,
+                -SUM(mi.cantidad) FILTER (WHERE mi.tipo IN ('venta', 'salida') AND mi.creado_en >= e.primera) AS restan
+           FROM movimientos_inventario mi
+           LEFT JOIN e ON e.modelo_id = mi.modelo_id
+          WHERE mi.modelo_id IS NOT NULL AND ($1::int IS NULL OR mi.modelo_id = $1)
+          GROUP BY mi.modelo_id
        )
        SELECT COALESCE(e.modelo_id, m.modelo_id) AS modelo_id,
-              COALESCE(e.n, 0) AS entradas, COALESCE(m.vendidas, 0) AS vendidas, COALESCE(m.salidas, 0) AS salidas
+              COALESCE(e.n, 0) AS entradas, COALESCE(m.vendidas, 0) AS vendidas, COALESCE(m.salidas, 0) AS salidas,
+              COALESCE(m.restan, 0) AS restan
          FROM e FULL JOIN m ON m.modelo_id = e.modelo_id`,
       [modeloId ?? null]
     );
@@ -75,7 +88,7 @@ export async function conteoPorModelo(modeloId?: number): Promise<Map<number, Co
         const entradas = Number(r.entradas);
         const vendidas = Number(r.vendidas);
         const salidas = Number(r.salidas);
-        return [r.modelo_id, { entradas, vendidas, salidas, existencia: entradas - vendidas - salidas }];
+        return [r.modelo_id, { entradas, vendidas, salidas, existencia: Math.max(0, entradas - Number(r.restan)) }];
       })
     );
   } catch (err) {

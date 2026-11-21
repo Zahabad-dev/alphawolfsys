@@ -282,7 +282,11 @@ export default async function AdminModelosPage({
                             <>
                               {c ? (
                                 <>
-                                  <span className="block font-semibold text-brand-cream">Quedan {c.existencia}</span>
+                                  {c.entradas > 0 ? (
+                                    <span className="block font-semibold text-brand-cream">Quedan {c.existencia}</span>
+                                  ) : (
+                                    <span className="block text-xs text-brand-cream/70">sin entradas registradas</span>
+                                  )}
                                   <span className="block text-xs text-brand-cream/70">
                                     entraron {c.entradas} · vend. {c.vendidas}
                                     {c.salidas ? ` · salidas ${c.salidas}` : ""}
