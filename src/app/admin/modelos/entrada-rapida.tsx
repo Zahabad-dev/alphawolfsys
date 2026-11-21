@@ -25,6 +25,7 @@ export default function EntradaRapida({
   const [piezas, setPiezas] = useState("");
   const [sucursal, setSucursal] = useState(String(sucursalInicial));
   const [cambiado, setCambiado] = useState(false);
+  const [sumar, setSumar] = useState(true);
   // Llave del intento: se conserva si hay que reintentar (no cuenta doble) y se renueva tras registrar.
   const intento = useRef<string | null>(null);
 
@@ -71,6 +72,7 @@ export default function EntradaRapida({
       <input type="hidden" name="modelo_id" value={modeloId} />
       <input type="hidden" name="sucursal_id" value={sucursal} />
       <input type="hidden" name="piezas" value={piezas} />
+      <input type="hidden" name="sumar_inventario" value={sumar ? "1" : ""} />
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1 text-xs text-brand-cream/70">
           Piezas
@@ -118,6 +120,17 @@ export default function EntradaRapida({
           Cerrar
         </button>
       </div>
+      <label className="flex items-center gap-2 text-xs text-brand-cream/70">
+        <input
+          type="checkbox"
+          checked={sumar}
+          onChange={(e) => {
+            setSumar(e.target.checked);
+            setCambiado(true);
+          }}
+        />
+        Súmalas también al inventario (desmárcalo si ya las registraste en Inventario o Corte)
+      </label>
       <div aria-live="polite" className="text-xs">
         {mensaje?.error && <span className="text-brand-red">{mensaje.error}</span>}
         {mensaje?.success && <span className="text-brand-green">{mensaje.success}</span>}

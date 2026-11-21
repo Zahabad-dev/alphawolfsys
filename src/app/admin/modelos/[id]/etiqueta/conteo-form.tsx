@@ -24,6 +24,7 @@ export default function ConteoForm({
   const [sucursal, setSucursal] = useState(String(sucursalInicial));
   const [correccion, setCorreccion] = useState(false);
   const [nota, setNota] = useState("");
+  const [sumar, setSumar] = useState(true);
   // Llave del intento: se crea al enviar y se conserva si hay que reintentar (no cuenta doble);
   // se renueva después de un registro exitoso. En un ref para que no difiera entre servidor y navegador.
   const intento = useRef<string | null>(null);
@@ -63,6 +64,7 @@ export default function ConteoForm({
       <input type="hidden" name="sucursal_id" value={sucursal} />
       <input type="hidden" name="correccion" value={correccion ? "1" : ""} />
       <input type="hidden" name="piezas" value={piezas} />
+      <input type="hidden" name="sumar_inventario" value={sumar && !correccion ? "1" : ""} />
       <input type="hidden" name="nota" value={nota} />
       <p className="text-sm font-semibold">
         {correccion ? "Corregir el conteo de este modelo" : "¿Cuántas piezas de este modelo etiquetaste?"}
@@ -109,6 +111,12 @@ export default function ConteoForm({
           {pending ? "Registrando…" : correccion ? "Registrar corrección" : "Registrar piezas etiquetadas"}
         </button>
       </div>
+      {!correccion && (
+        <label className="flex items-center gap-2 text-sm text-black/70">
+          <input type="checkbox" checked={sumar} onChange={(e) => cambia(() => setSumar(e.target.checked))} />
+          Súmalas también al inventario (desmárcalo si ya las registraste en Inventario o Corte)
+        </label>
+      )}
       <label className="flex items-center gap-2 text-sm text-black/70">
         <input
           type="checkbox"
