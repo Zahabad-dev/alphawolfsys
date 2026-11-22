@@ -371,31 +371,18 @@ export async function enviarBluetooth(datos: Uint8Array, progreso?: (enviado: nu
       if (destino) break;
     }
     if (!destino) throw new Error("No encontré por dónde mandarle datos a esa impresora por Bluetooth. Prueba por USB.");
-    // Velocidad: confirmar CADA trozo (una ida y vuelta por cada 100 bytes) hacía que una fila tardara ~5 s.
-    // Ahora se manda sin confirmación y solo cada CADA_SYNC trozos se espera una confirmación (o una pausa),
-    // para que la impresora no se sature. El tamaño del trozo se prueba con el primero: si no cabe, se baja.
-    const sinRespuesta = destino.properties.writeWithoutResponse && !!destino.writeValueWithoutResponse;
+    // Trozos chicos (caben en cualquier MTU) y, si se puede, con confirmación: la impresora marca el ritmo.
+    const trozo = 100;
     const conRespuesta = destino.properties.write;
-    const CADA_SYNC = 16;
-    const manda = async (parte: Uint8Array<ArrayBuffer>, confirmar: boolean) => {
-      if (!sinRespuesta || (confirmar && conRespuesta)) await destino.writeValue(parte);
-      else await destino.writeValueWithoutResponse!(parte);
-    };
-    let trozo = 0;
-    for (const t of [180, 100, 20]) {
-      try {
-        await manda(datos.slice(0, t), true);
-        trozo = t;
-        break;
-      } catch (e) {
-        if (t === 20) throw e;
+    for (let i = 0; i < datos.length; i += trozo) {
+      const parte = datos.slice(i, i + trozo);
+      if (conRespuesta || !destino.writeValueWithoutResponse) {
+        await destino.writeValue(parte);
+      } else {
+        await destino.writeValueWithoutResponse(parte);
+        await esperar(15);
       }
-    }
-    for (let i = trozo, n = 1; i < datos.length; i += trozo, n++) {
-      const sync = n % CADA_SYNC === 0;
-      await manda(datos.slice(i, i + trozo), sync);
-      if (sinRespuesta && sync && !conRespuesta) await esperar(60);
-      if (n % 50 === 0) progreso?.(i, datos.length);
+      if (i % (trozo * 50) === 0) progreso?.(i, datos.length);
     }
     progreso?.(datos.length, datos.length);
     return disp.name ?? "impresora";
