@@ -95,14 +95,8 @@ function PanelZendio({ token, texto, precio, familiaLetra, copiasIniciales }: Pr
       } else {
         const lotes = await porLotes(etiquetas, ajustes, familiaLetra, (f) => filasATspl(f, ajustes), preparando, ajustes.qrImpresora);
         const tspl = unir([cabeceraTspl(ajustes), ...lotes]);
-        const enviando = (e: number, t: number) =>
-          setAvance(e >= t ? "Imprimiendo… no cierres esta página." : `Enviando a la impresora… ${Math.round((e / t) * 100)} %`);
-        // Con el envío rápido los datos llegan antes de que la impresora termine: si se le manda la fila siguiente
-        // mientras imprime, la pierde. Se hace una pausa por fila y se espera a que acabe antes de cortar el Bluetooth.
-        const nombre =
-          via === "ble"
-            ? await enviarBluetooth(tspl, enviando, ajustes.qrImpresora ? 3000 : 2000, ajustes.qrImpresora ? 1000 : 0)
-            : await enviarUsb(tspl);
+        const enviando = (e: number, t: number) => setAvance(`Enviando a la impresora… ${Math.round((e / t) * 100)} %`);
+        const nombre = via === "ble" ? await enviarBluetooth(tspl, enviando) : await enviarUsb(tspl);
         if (nombre) {
           setMensaje({
             tipo: "ok",

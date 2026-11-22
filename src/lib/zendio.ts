@@ -406,14 +406,7 @@ async function elegir<T>(f: () => Promise<T>): Promise<T | null> {
 }
 
 /** Manda los bytes a una impresora por Bluetooth (BLE). Devuelve null si se canceló la elección. */
-export async function enviarBluetooth(
-  datos: Uint8Array,
-  progreso?: (enviado: number, total: number) => void,
-  /** Cuánto esperar antes de cortar la conexión: la impresora debe terminar de imprimir lo que ya recibió. */
-  esperaFinalMs = 2000,
-  /** Pausa después de cada fila (cada «PRINT»), para no mandarle datos mientras imprime y los pierde. */
-  pausaPorFilaMs = 0
-): Promise<string | null> {
+export async function enviarBluetooth(datos: Uint8Array, progreso?: (enviado: number, total: number) => void): Promise<string | null> {
   const ble = nav().bluetooth;
   if (!ble) throw new Error("Este navegador no tiene Bluetooth (usa Chrome).");
   const disp = await elegir(() => ble.requestDevice({ acceptAllDevices: true, optionalServices: SERVICIOS_BLE }));
@@ -436,37 +429,21 @@ export async function enviarBluetooth(
     // Trozos chicos (caben en cualquier MTU) y, si se puede, con confirmación: la impresora marca el ritmo.
     const trozo = 100;
     const conRespuesta = destino.properties.write;
-    // Dónde termina cada fila: justo después de cada «PRINT 1,1\r\n».
-    const finesDeFila = new Set<number>();
-    if (pausaPorFilaMs > 0) {
-      const marca = new TextEncoder().encode("PRINT 1,1\r\n");
-      for (let i = 0; i + marca.length <= datos.length; i++) {
-        let igual = true;
-        for (let k = 0; k < marca.length && igual; k++) igual = datos[i + k] === marca[k];
-        if (igual) finesDeFila.add(i + marca.length);
-      }
-    }
-    const siguienteFin = (desde: number) => {
-      for (let j = desde + 1; j < desde + trozo && j <= datos.length; j++) if (finesDeFila.has(j)) return j;
-      return Math.min(desde + trozo, datos.length);
-    };
-    for (let i = 0, fin = 0; i < datos.length; i = fin) {
-      fin = siguienteFin(i);
-      const parte = datos.slice(i, fin);
+    for (let i = 0; i < datos.length; i += trozo) {
+      const parte = datos.slice(i, i + trozo);
       if (conRespuesta || !destino.writeValueWithoutResponse) {
         await destino.writeValue(parte);
       } else {
         await destino.writeValueWithoutResponse(parte);
         await esperar(15);
       }
-      if (finesDeFila.has(fin) && fin < datos.length) await esperar(pausaPorFilaMs);
       if (i % (trozo * 50) === 0) progreso?.(i, datos.length);
     }
     progreso?.(datos.length, datos.length);
     return disp.name ?? "impresora";
   } finally {
-    // Si se corta la conexión mientras la impresora aún imprime, deja lo que falta en cola hasta el siguiente envío.
-    await esperar(esperaFinalMs);
+    // Tiempo para que la impresora termine de recibir antes de cortar la conexión.
+    await esperar(2000);
     disp.gatt.disconnect();
   }
 }
