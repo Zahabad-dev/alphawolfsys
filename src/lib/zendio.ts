@@ -25,11 +25,6 @@ export interface AjustesZendio {
   ajusteYMm: number;
   /** Por si la impresora interpreta al revés el blanco y negro del bitmap. */
   invertir: boolean;
-  /**
-   * Bluetooth/USB: el QR lo dibuja la impresora (comando QRCODE) y solo el texto va como imagen.
-   * Manda ~4 veces menos datos, así que imprime más rápido. No aplica a «Imprimir desde PC».
-   */
-  qrImpresora: boolean;
 }
 
 export const AJUSTES_INICIALES: AjustesZendio = {
@@ -42,7 +37,6 @@ export const AJUSTES_INICIALES: AjustesZendio = {
   ajusteXMm: 0,
   ajusteYMm: 0,
   invertir: false,
-  qrImpresora: false,
 };
 
 const CLAVE_AJUSTES = "wolf.zendio.ajustes";
@@ -65,7 +59,6 @@ export function normalizar(a: Partial<AjustesZendio>): AjustesZendio {
     ajusteXMm: limitar(a.ajusteXMm, -10, 10, d.ajusteXMm),
     ajusteYMm: limitar(a.ajusteYMm, -10, 10, d.ajusteYMm),
     invertir: a.invertir === true,
-    qrImpresora: a.qrImpresora === true,
   };
 }
 
@@ -115,14 +108,13 @@ export async function porLotes<T>(
   aCrudo: AjustesZendio,
   familia: string,
   convertir: (filas: HTMLCanvasElement[]) => T,
-  progreso?: (hechas: number, total: number) => void,
-  qrNativo = false
+  progreso?: (hechas: number, total: number) => void
 ): Promise<T[]> {
   const a = normalizar(aCrudo);
   const paso = FILAS_POR_LOTE * a.columnas;
   const salida: T[] = [];
   for (let i = 0; i < etiquetas.length; i += paso) {
-    salida.push(convertir(await dibujarFilas(etiquetas.slice(i, i + paso), a, familia, qrNativo)));
+    salida.push(convertir(await dibujarFilas(etiquetas.slice(i, i + paso), a, familia)));
     progreso?.(Math.min(etiquetas.length, i + paso), etiquetas.length);
     await ceder();
   }
@@ -153,28 +145,8 @@ function renglones(ctx: CanvasRenderingContext2D, texto: string, ancho: number):
   return lineas;
 }
 
-/** QR que dibuja la propia impresora (comando TSPL QRCODE), en puntos de impresora. */
-interface QrNativo {
-  x: number;
-  y: number;
-  modulo: number;
-  token: string;
-}
-/** QRs de cada fila cuando la impresora los dibuja (la fila de canvas lleva solo el texto). */
-const qrsDeFila = new WeakMap<HTMLCanvasElement, QrNativo[]>();
-/** Solo tokens sencillos van como comando (sin comillas ni nada raro); lo demás se dibuja como imagen. */
-const tokenSeguro = (t: string) => /^[A-Za-z0-9-]{1,64}$/.test(t);
-
-/** Dibuja UNA etiqueta en (x0, y0) del canvas, en puntos de impresora. Si se pasa `qrs`, el QR no se dibuja: se anota ahí. */
-function dibujarEtiqueta(
-  ctx: CanvasRenderingContext2D,
-  x0: number,
-  y0: number,
-  d: DatosEtiqueta,
-  a: AjustesZendio,
-  familia: string,
-  qrs?: QrNativo[]
-) {
+/** Dibuja UNA etiqueta en (x0, y0) del canvas, en puntos de impresora. */
+function dibujarEtiqueta(ctx: CanvasRenderingContext2D, x0: number, y0: number, d: DatosEtiqueta, a: AjustesZendio, familia: string) {
   const ancho = mm(a.anchoMm);
   const alto = mm(a.altoMm);
   const margen = mm(1);
@@ -202,8 +174,7 @@ function dibujarEtiqueta(
   const qx = x0 + Math.round((ancho - ladoQr) / 2);
   const qy = y0 + margen;
   ctx.fillStyle = "#000";
-  if (qrs && tokenSeguro(d.token)) qrs.push({ x: qx, y: qy, modulo, token: d.token });
-  else for (let fy = 0; fy < n; fy++) {
+  for (let fy = 0; fy < n; fy++) {
     for (let fx = 0; fx < n; fx++) {
       if (qr.modules.get(fx, fy)) ctx.fillRect(qx + fx * modulo, qy + fy * modulo, modulo, modulo);
     }
@@ -227,12 +198,7 @@ function dibujarEtiqueta(
  * Dibuja las filas del rollo (cada una con hasta `columnas` etiquetas). Devuelve un canvas por fila, del ancho
  * exacto del papel, en blanco y negro puro (sin grises: la térmica solo imprime puntos).
  */
-export async function dibujarFilas(
-  etiquetas: DatosEtiqueta[],
-  aCrudo: AjustesZendio,
-  familia: string,
-  qrNativo = false
-): Promise<HTMLCanvasElement[]> {
+export async function dibujarFilas(etiquetas: DatosEtiqueta[], aCrudo: AjustesZendio, familia: string): Promise<HTMLCanvasElement[]> {
   const a = normalizar(aCrudo);
   try {
     await document.fonts?.load(`700 ${mm(2.2)}px ${familia}`);
@@ -249,7 +215,6 @@ export async function dibujarFilas(
     const ctx = c.getContext("2d")!;
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, W, H);
-    const qrs: QrNativo[] | undefined = qrNativo ? [] : undefined;
     etiquetas.slice(i, i + a.columnas).forEach((d, k) => {
       const x = mm(a.margenIzqMm + a.ajusteXMm) + k * mm(a.anchoMm + a.gapColMm);
       const y = mm(a.ajusteYMm);
@@ -257,7 +222,7 @@ export async function dibujarFilas(
       ctx.beginPath();
       ctx.rect(x, y, mm(a.anchoMm), mm(a.altoMm));
       ctx.clip();
-      dibujarEtiqueta(ctx, x, y, d, a, familia, qrs);
+      dibujarEtiqueta(ctx, x, y, d, a, familia);
       ctx.restore();
     });
     // Umbral: todo punto queda negro o blanco.
@@ -268,7 +233,6 @@ export async function dibujarFilas(
       img.data[p + 3] = 255;
     }
     ctx.putImageData(img, 0, 0);
-    if (qrs) qrsDeFila.set(c, qrs);
     filas.push(c);
   }
   return filas;
@@ -294,10 +258,7 @@ export function unir(partes: Uint8Array[]): Uint8Array {
   return out;
 }
 
-/**
- * Comandos TSPL de las filas (sin cabecera), un BITMAP + PRINT por fila. Si la fila trae QRs para la impresora,
- * el BITMAP se recorta a la franja que tiene tinta (el texto) y los QR van como comando QRCODE.
- */
+/** Comandos TSPL de las filas (sin cabecera), un BITMAP + PRINT por fila. */
 export function filasATspl(filas: HTMLCanvasElement[], aCrudo: AjustesZendio): Uint8Array {
   const a = normalizar(aCrudo);
   const enc = new TextEncoder();
@@ -306,32 +267,16 @@ export function filasATspl(filas: HTMLCanvasElement[], aCrudo: AjustesZendio): U
     const ctx = c.getContext("2d")!;
     const { data, width, height } = ctx.getImageData(0, 0, c.width, c.height);
     const bytesFila = Math.ceil(width / 8);
-    const qrs = qrsDeFila.get(c);
-    // Con QR de la impresora solo se manda la franja con tinta; sin él, la fila completa (como siempre).
-    let y0 = 0;
-    let y1 = height;
-    if (qrs) {
-      const conTinta = (y: number) => {
-        for (let x = 0; x < width; x++) if (data[(y * width + x) * 4] < 128) return true;
-        return false;
-      };
-      while (y0 < height && !conTinta(y0)) y0++;
-      while (y1 > y0 && !conTinta(y1 - 1)) y1--;
-    }
-    const alto = y1 - y0;
-    const bits = new Uint8Array(bytesFila * alto);
-    for (let y = 0; y < alto; y++) {
+    const bits = new Uint8Array(bytesFila * height);
+    for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        const negro = data[((y + y0) * width + x) * 4] < 128;
+        const negro = data[(y * width + x) * 4] < 128;
         // En TSPL, un bit en 0 imprime el punto; `invertir` lo voltea si la impresora lo entiende al revés.
         const blanco = a.invertir ? negro : !negro;
         if (blanco) bits[y * bytesFila + (x >> 3)] |= 0x80 >> (x & 7);
       }
     }
-    partes.push(enc.encode("CLS\r\n"));
-    if (alto > 0) partes.push(enc.encode(`BITMAP 0,${y0},${bytesFila},${alto},0,`), bits, enc.encode("\r\n"));
-    for (const q of qrs ?? []) partes.push(enc.encode(`QRCODE ${q.x},${q.y},M,${q.modulo},A,0,"${q.token}"\r\n`));
-    partes.push(enc.encode("PRINT 1,1\r\n"));
+    partes.push(enc.encode(`CLS\r\nBITMAP 0,0,${bytesFila},${height},0,`), bits, enc.encode("\r\nPRINT 1,1\r\n"));
   }
   return unir(partes);
 }

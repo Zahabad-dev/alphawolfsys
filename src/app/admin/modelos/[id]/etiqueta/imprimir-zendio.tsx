@@ -93,7 +93,7 @@ function PanelZendio({ token, texto, precio, familiaLetra, copiasIniciales }: Pr
         imprimirPorPagina(imagenes, ajustes);
         setMensaje({ tipo: "ok", texto: "En la ventana de impresión elige la Zendio, tamaño «Real / 100 %» y márgenes «Ninguno»." });
       } else {
-        const lotes = await porLotes(etiquetas, ajustes, familiaLetra, (f) => filasATspl(f, ajustes), preparando, ajustes.qrImpresora);
+        const lotes = await porLotes(etiquetas, ajustes, familiaLetra, (f) => filasATspl(f, ajustes), preparando);
         const tspl = unir([cabeceraTspl(ajustes), ...lotes]);
         const enviando = (e: number, t: number) => setAvance(`Enviando a la impresora… ${Math.round((e / t) * 100)} %`);
         const nombre = via === "ble" ? await enviarBluetooth(tspl, enviando) : await enviarUsb(tspl);
@@ -192,10 +192,6 @@ function PanelZendio({ token, texto, precio, familiaLetra, copiasIniciales }: Pr
             <label className="flex items-center gap-2 pb-1 text-xs text-black/70">
               <input type="checkbox" checked={ajustes.invertir} onChange={(e) => cambiar("invertir", e.target.checked)} />
               Sale en negativo (invertir)
-            </label>
-            <label className="flex items-center gap-2 pb-1 text-xs text-black/70">
-              <input type="checkbox" checked={ajustes.qrImpresora} onChange={(e) => cambiar("qrImpresora", e.target.checked)} />
-              Envío rápido (el QR lo dibuja la impresora; Bluetooth/USB)
             </label>
             <button
               type="button"
