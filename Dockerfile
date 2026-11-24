@@ -1,5 +1,5 @@
-# Imagen oficial de Node con el parche de octubre 2026 (22.23.4). Nixpacks solo ofrece 22.19.0.
-FROM node:22.23.4-bookworm-slim
+# Imagen oficial de Node con el parche de noviembre 2026 (22.23.5). Nixpacks solo ofrece 22.19.0.
+FROM node:22.23.5-bookworm-slim
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
